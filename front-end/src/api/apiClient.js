@@ -1,0 +1,141 @@
+const API_BASE = 'http://localhost:3001/api';
+
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+async function fetchWithAuth(url, options = {}) {
+    const accessToken = localStorage.getItem('accessToken');
+
+    const config = {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
+            ...options.headers
+        }
+    };
+
+    const response = await fetch(`${API_BASE}${url}`, config);
+
+    if (response.status === 401) {
+        const data = await response.json();
+
+        if (data.code === 'TOKEN_EXPIRED') {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    config.headers.Authorization = `Bearer ${token}`;
+                    return fetch(`${API_BASE}${url}`, config);
+                });
+            }
+
+            isRefreshing = true;
+
+            try {
+                const refreshToken = localStorage.getItem('refreshToken');
+                const refreshResponse = await fetch(`${API_BASE}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken })
+                });
+
+                if (!refreshResponse.ok) {
+                    throw new Error('Refresh failed');
+                }
+
+                const refreshData = await refreshResponse.json();
+                localStorage.setItem('accessToken', refreshData.accessToken);
+                localStorage.setItem('refreshToken', refreshData.refreshToken);
+
+                processQueue(null, refreshData.accessToken);
+
+                config.headers.Authorization = `Bearer ${refreshData.accessToken}`;
+                return fetch(`${API_BASE}${url}`, config);
+            } catch (error) {
+                processQueue(error, null);
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+                throw error;
+            } finally {
+                isRefreshing = false;
+            }
+        }
+    }
+
+    return response;
+}
+
+export const api = {
+    async login(username, password) {
+        const response = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        return response.json();
+    },
+
+    async refresh(refreshToken) {
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken })
+        });
+        return response.json();
+    },
+
+    async logout(refreshToken) {
+        const response = await fetchWithAuth('/auth/logout', {
+            method: 'POST',
+            body: JSON.stringify({ refreshToken })
+        });
+        return response.json();
+    },
+
+    async getProfile() {
+        const response = await fetchWithAuth('/auth/profile');
+        return response.json();
+    },
+
+    async getUsers() {
+        const response = await fetchWithAuth('/users');
+        return response.json();
+    },
+
+    async createUser(data) {
+        const response = await fetchWithAuth('/users', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async updateUser(id, data) {
+        const response = await fetchWithAuth(`/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async deleteUser(id) {
+        const response = await fetchWithAuth(`/users/${id}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    }
+};
