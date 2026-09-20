@@ -285,7 +285,7 @@ export default function ProductosPage() {
       </main>
 
       {modalOpen && (
-        <div className="modal-overlay" onClick={closeModal}>
+        <div className="modal-overlay open" onClick={closeModal}>
           <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg text-on-surface font-semibold">
