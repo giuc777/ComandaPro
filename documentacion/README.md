@@ -27,29 +27,32 @@ Fase 1 (Auth)
     │
     ├──→ Fase 2 (Productos)
     │        │
-    │        ├──→ Fase 2B (Catálogos) ✅
-    │        │
-    │        └──→ Fase 3 (Modificadores)
-    │                 │
-    │                 └──→ Fase 4 (Órdenes POS)
-    │                          │
-    │                          ├──→ Fase 5 (KDS) 🚧 Próximamente
-    │                          ├──→ Fase 6 (Pagos)
-    │                          │        │
-    │                          │        ├──→ Fase 7 (Inventario + Recetas)
-    │                          │        │        │
-    │                          │        │        └──→ Fase 8 (Proveedores)
-    │                          │        │
-    │                          │        └──→ Fase 10 (Turnos)
-    │                          │                 │
-    │                          │                 └──→ Fase 11 (Reportes)
-    │                          │
-    │                          └──→ Fase 9 (Mesas)
-    │
-    └──→ Fase 12 (Testing + Deploy)
+     │        └──→ Fase 2B (Catálogos + Modificadores) ✅
+     │
+     ├──→ Fase 3 (Órdenes POS)
+     │        │
+     │        ├──→ Fase 4 (KDS) 🚧 Próximamente
+     │        ├──→ Fase 5 (Pagos)
+     │        │        │
+     │        │        ├──→ Fase 6 (Inventario + Recetas)
+     │        │        │        │
+     │        │        │        └──→ Fase 7 (Proveedores)
+     │        │        │
+     │        │        └──→ Fase 8 (Turnos)
+     │        │                 │
+     │        │                 └──→ Fase 9 (Reportes)
+     │        │
+     │        └──→ Fase 10 (Mesas)
+     │
+     └──→ Fase 11 (Testing + Deploy)
 ```
 
-> **Nota:** Fase 7 (Inventario + Recetas) depende de Fase 4 (Órdenes) y Fase 6
+> **Nota:** Los modificadores (extras de precio, grupos requeridos, etc.) se
+> gestionan dentro de Fase 2B (Catálogos) — ver `is_modifier` en `catalog_groups`.
+> La tabla `modifier_groups` fue eliminada; los grupos de modificadores viven en
+> `catalog_groups` y se asignan a productos vía `product_modifier_groups`.
+
+> **Nota:** Fase 6 (Inventario + Recetas) depende de Fase 3 (Órdenes) y Fase 5
 > (Pagos) porque la deducción de inventario es **obligatoria y automática** al
 > cobrar, ejecutándose dentro de la transacción de pago.
 

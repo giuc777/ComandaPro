@@ -25,11 +25,11 @@ export function createCatalogController(pool) {
                 const { id } = req.params;
                 const [rows] = await pool.query('CALL sp_get_catalog_group(?)', [id]);
 
-                if (!rows || rows.length === 0) {
+                if (!rows || !rows.length || !rows[0].length) {
                     return res.status(404).json({ error: 'Grupo no encontrado' });
                 }
 
-                res.json(toJSON(rows[0]));
+                res.json(toJSON(rows[0][0]));
             } catch (error) {
                 console.error('Error in getGroup:', error.message);
                 res.status(500).json({ error: 'Error del servidor' });
@@ -38,26 +38,29 @@ export function createCatalogController(pool) {
 
         async createGroup(req, res) {
             try {
-                const { name, slug, description, icon, color, sort_order } = req.body;
+                const { name, slug, description, icon, color, sort_order, is_modifier, required, max_selections } = req.body;
 
                 if (!name || !slug) {
                     return res.status(400).json({ error: 'Nombre y slug requeridos' });
                 }
 
-                // Validar slug unico
                 const [slugCheck] = await pool.query('CALL sp_check_catalog_slug_unique(?, ?)', [slug, null]);
                 if (Number(slugCheck[0].cnt) > 0) {
                     return res.status(409).json({ error: 'El slug ya existe' });
                 }
 
                 const [result] = await pool.query(
-                    'CALL sp_create_catalog_group(?, ?, ?, ?, ?, ?)',
-                    [name, slug, description || null, icon || null, color || null, sort_order || 0]
+                    'CALL sp_create_catalog_group(?, ?, ?, ?, ?, ?, ?)',
+                    [name, slug, description || null, sort_order || 0, is_modifier || false, required || false, max_selections || 1]
                 );
 
-                const groupId = Number(result[0].id);
+                const groupId = Number(result[0][0].id);
 
-                res.status(201).json({ id: groupId, name, slug, description, sort_order: sort_order || 0, active: true });
+                res.status(201).json({
+                    id: groupId, name, slug, description, sort_order: sort_order || 0,
+                    is_modifier: is_modifier || false, required: required || false,
+                    max_selections: max_selections || 1, active: true
+                });
             } catch (error) {
                 if (error.code === 'ER_DUP_ENTRY') {
                     return res.status(409).json({ error: 'El slug ya existe' });
@@ -70,14 +73,14 @@ export function createCatalogController(pool) {
         async updateGroup(req, res) {
             try {
                 const { id } = req.params;
-                const { name, description, icon, color, sort_order, active } = req.body;
+                const { name, description, icon, color, sort_order, active, is_modifier, required, max_selections } = req.body;
 
                 const [result] = await pool.query(
-                    'CALL sp_update_catalog_group(?, ?, ?, ?, ?, ?, ?)',
-                    [id, name, description || null, icon || null, color || null, sort_order || 0, active !== false]
+                    'CALL sp_update_catalog_group(?, ?, ?, ?, ?, ?, ?, ?)',
+                    [id, name, description || null, sort_order || 0, active !== false, is_modifier || false, required || false, max_selections || 1]
                 );
 
-                if (Number(result[0].affected) === 0) {
+                if (Number(result[0][0].affected) === 0) {
                     return res.status(404).json({ error: 'Grupo no encontrado' });
                 }
 
@@ -91,10 +94,9 @@ export function createCatalogController(pool) {
         async deleteGroup(req, res) {
             try {
                 const { id } = req.params;
-
                 const [result] = await pool.query('CALL sp_delete_catalog_group(?)', [id]);
 
-                if (Number(result[0].affected) === 0) {
+                if (Number(result[0][0].affected) === 0) {
                     return res.status(404).json({ error: 'Grupo no encontrado' });
                 }
 
@@ -106,7 +108,7 @@ export function createCatalogController(pool) {
         },
 
         // ========================
-        // ÍTEMS
+        // ITEMS
         // ========================
 
         async listItemsByGroup(req, res) {
@@ -125,11 +127,11 @@ export function createCatalogController(pool) {
                 const { id } = req.params;
                 const [rows] = await pool.query('CALL sp_get_catalog_item(?)', [id]);
 
-                if (!rows || rows.length === 0) {
+                if (!rows || !rows.length || !rows[0].length) {
                     return res.status(404).json({ error: 'Item no encontrado' });
                 }
 
-                res.json(toJSON(rows[0]));
+                res.json(toJSON(rows[0][0]));
             } catch (error) {
                 console.error('Error in getItem:', error.message);
                 res.status(500).json({ error: 'Error del servidor' });
@@ -138,22 +140,22 @@ export function createCatalogController(pool) {
 
         async createItem(req, res) {
             try {
-                const { group_id, name, description, icon, color, parent_id, sort_order } = req.body;
+                const { group_id, name, description, icon, color, parent_id, sort_order, price_adjustment } = req.body;
 
                 if (!group_id || !name) {
                     return res.status(400).json({ error: 'group_id y nombre requeridos' });
                 }
 
                 const [result] = await pool.query(
-                    'CALL sp_create_catalog_item(?, ?, ?, ?, ?, ?, ?)',
-                    [group_id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0]
+                    'CALL sp_create_catalog_item(?, ?, ?, ?, ?, ?, ?, ?)',
+                    [group_id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, price_adjustment || 0]
                 );
 
-                const itemId = Number(result[0].id);
+                const itemId = Number(result[0][0].id);
 
                 res.status(201).json({
                     id: itemId, group_id, name, description, icon, color,
-                    parent_id, sort_order: sort_order || 0, active: true
+                    parent_id, sort_order: sort_order || 0, price_adjustment: price_adjustment || 0, active: true
                 });
             } catch (error) {
                 if (error.code === 'ER_DUP_ENTRY') {
@@ -167,14 +169,14 @@ export function createCatalogController(pool) {
         async updateItem(req, res) {
             try {
                 const { id } = req.params;
-                const { name, description, icon, color, parent_id, sort_order, active } = req.body;
+                const { name, description, icon, color, parent_id, sort_order, active, price_adjustment } = req.body;
 
                 const [result] = await pool.query(
-                    'CALL sp_update_catalog_item(?, ?, ?, ?, ?, ?, ?, ?)',
-                    [id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, active !== false]
+                    'CALL sp_update_catalog_item(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, active !== false, price_adjustment || 0]
                 );
 
-                if (Number(result[0].affected) === 0) {
+                if (Number(result[0][0].affected) === 0) {
                     return res.status(404).json({ error: 'Item no encontrado' });
                 }
 
@@ -191,16 +193,44 @@ export function createCatalogController(pool) {
         async deleteItem(req, res) {
             try {
                 const { id } = req.params;
-
                 const [result] = await pool.query('CALL sp_delete_catalog_item(?)', [id]);
 
-                if (Number(result[0].affected) === 0) {
+                if (Number(result[0][0].affected) === 0) {
                     return res.status(404).json({ error: 'Item no encontrado' });
                 }
 
                 res.json({ success: true });
             } catch (error) {
                 console.error('Error in deleteItem:', error.message);
+                res.status(500).json({ error: 'Error del servidor' });
+            }
+        },
+
+        // ========================
+        // MODIFICADORES POR PRODUCTO
+        // ========================
+
+        async getProductModifiers(req, res) {
+            try {
+                const { id } = req.params;
+                const [rows] = await pool.query('CALL sp_get_product_modifiers(?)', [id]);
+                res.json(toJSON(rows));
+            } catch (error) {
+                console.error('Error in getProductModifiers:', error.message);
+                res.status(500).json({ error: 'Error del servidor' });
+            }
+        },
+
+        async assignProductModifiers(req, res) {
+            try {
+                const { id } = req.params;
+                const { group_ids } = req.body;
+
+                await pool.query('CALL sp_assign_product_modifier_groups(?, ?)', [id, JSON.stringify(group_ids || [])]);
+
+                res.json({ success: true });
+            } catch (error) {
+                console.error('Error in assignProductModifiers:', error.message);
                 res.status(500).json({ error: 'Error del servidor' });
             }
         }

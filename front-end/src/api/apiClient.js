@@ -269,69 +269,8 @@ export const api = {
     },
 
     // ========================
-    // MODIFIERS
+    // PRODUCT MODIFIERS
     // ========================
-
-    async getModifierGroups() {
-        const response = await fetchWithAuth('/modifiers/groups');
-        return response.json();
-    },
-
-    async getModifierGroup(id) {
-        const response = await fetchWithAuth(`/modifiers/groups/${id}`);
-        return response.json();
-    },
-
-    async createModifierGroup(data) {
-        const response = await fetchWithAuth('/modifiers/groups', {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-        return response.json();
-    },
-
-    async updateModifierGroup(id, data) {
-        const response = await fetchWithAuth(`/modifiers/groups/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(data)
-        });
-        return response.json();
-    },
-
-    async deleteModifierGroup(id) {
-        const response = await fetchWithAuth(`/modifiers/groups/${id}`, {
-            method: 'DELETE'
-        });
-        return response.json();
-    },
-
-    async getModifierOptions(groupId) {
-        const response = await fetchWithAuth(`/modifiers/groups/${groupId}/options`);
-        return response.json();
-    },
-
-    async createModifierOption(data) {
-        const response = await fetchWithAuth('/modifiers/options', {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-        return response.json();
-    },
-
-    async updateModifierOption(id, data) {
-        const response = await fetchWithAuth(`/modifiers/options/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(data)
-        });
-        return response.json();
-    },
-
-    async deleteModifierOption(id) {
-        const response = await fetchWithAuth(`/modifiers/options/${id}`, {
-            method: 'DELETE'
-        });
-        return response.json();
-    },
 
     async getProductModifiers(productId) {
         const response = await fetchWithAuth(`/products/${productId}/modifiers`);

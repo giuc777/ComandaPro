@@ -48,7 +48,7 @@ const MOCK_GROUPS = [
   { id: 5, name: 'Ingredientes Principales', slug: 'ingredientes_principales', description: 'Base de ingredientes para recetas', icon: 'eco', color: '#002b26', item_count: 6 },
 ];
 
-const EMPTY_ITEM = { name: '', description: '', icon: 'label', color: '', sort_order: 0 };
+const EMPTY_ITEM = { name: '', description: '', icon: 'label', color: '', sort_order: 0, price_adjustment: 0 };
 
 export default function CatalogoDetallePage() {
   const { slug } = useParams();
@@ -61,6 +61,9 @@ export default function CatalogoDetallePage() {
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_ITEM });
   const [toast, setToast] = useState(null);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [allProducts, setAllProducts] = useState([]);
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -114,6 +117,7 @@ export default function CatalogoDetallePage() {
       icon: item.icon || 'label',
       color: item.color || '',
       sort_order: item.sort_order || 0,
+      price_adjustment: item.price_adjustment || 0,
     });
     setModalOpen(true);
   }
@@ -176,6 +180,24 @@ export default function CatalogoDetallePage() {
     showToast('Item desactivado');
   }
 
+  async function openAssignModal() {
+    try { setAllProducts(await api.getProducts()); } catch { setAllProducts([]); }
+    setSelectedProductIds([]); setAssignModalOpen(true);
+  }
+
+  async function handleSaveAssignment() {
+    try {
+      for (const productId of selectedProductIds) {
+        const current = await api.getProductModifiers(productId);
+        const existingGroupIds = [...new Set(current.map(m => m.group_id))];
+        if (!existingGroupIds.includes(group.id)) {
+          await api.assignProductModifiers(productId, [...existingGroupIds, group.id]);
+        }
+      }
+      setAssignModalOpen(false); showToast('Asignacion guardada');
+    } catch (err) { showToast(err.error || 'Error al asignar', 'error'); }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col min-h-screen bg-surface items-center justify-center">
@@ -206,9 +228,16 @@ export default function CatalogoDetallePage() {
               </span>
             </div>
           </div>
-          <button onClick={openCreate} className="btn-primary text-[0.75rem] py-1.5">
-            <span className="material-symbols-outlined text-[16px]">add</span> Nuevo Item
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={openCreate} className="btn-primary text-[0.75rem] py-1.5">
+              <span className="material-symbols-outlined text-[16px]">add</span> Nuevo Item
+            </button>
+            {group.is_modifier && (
+              <button onClick={openAssignModal} className="btn-ghost text-[0.75rem] py-1.5">
+                <span className="material-symbols-outlined text-[16px]">link</span> Asignar productos
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -246,6 +275,7 @@ export default function CatalogoDetallePage() {
                   <th className="text-left px-4 py-2.5">Icono</th>
                   <th className="text-left px-4 py-2.5">Color</th>
                   <th className="text-left px-4 py-2.5">Orden</th>
+                  {group.is_modifier && <th className="text-right px-4 py-2.5">Ajuste</th>}
                   <th className="text-right px-4 py-2.5">Accion</th>
                 </tr>
               </thead>
@@ -270,6 +300,11 @@ export default function CatalogoDetallePage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-[0.8125rem] text-on-surface-variant">{item.sort_order}</td>
+                    {group.is_modifier && (
+                      <td className="px-4 py-3 text-[0.8125rem] text-right font-semibold">
+                        {item.price_adjustment > 0 ? `+$${Number(item.price_adjustment).toFixed(2)}` : item.price_adjustment < 0 ? `-$${Math.abs(Number(item.price_adjustment)).toFixed(2)}` : <span className="text-on-surface-variant">-</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openEdit(item)} className="btn-ghost py-1 text-[0.6875rem]">
                         <span className="material-symbols-outlined text-[14px]">edit</span>
@@ -325,6 +360,16 @@ export default function CatalogoDetallePage() {
                 <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Orden</label>
                 <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="input-field" min="0" />
               </div>
+              {group.is_modifier && (
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Ajuste de precio</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-on-surface-variant">$</span>
+                    <input type="number" step="0.01" value={form.price_adjustment} onChange={e => setForm(f => ({ ...f, price_adjustment: parseFloat(e.target.value) || 0 }))} className="input-field" placeholder="0.00" />
+                  </div>
+                  <span className="text-[0.6875rem] text-on-surface-variant">Positivo = mas caro, negativo = mas barato</span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 mt-5">
@@ -344,6 +389,34 @@ export default function CatalogoDetallePage() {
         }`}>
           <span className="material-symbols-outlined text-[20px]">{toast.type === 'error' ? 'error' : 'check_circle'}</span>
           <span>{toast.message}</span>
+        </div>
+      )}
+
+      {assignModalOpen && (
+        <div className="modal-overlay open" onClick={() => setAssignModalOpen(false)}>
+          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg text-on-surface font-semibold">Asignar productos al grupo</h2>
+              <button onClick={() => setAssignModalOpen(false)} className="p-1 rounded-full hover:bg-surface-container-high">
+                <span className="material-symbols-outlined text-on-surface-variant">close</span>
+              </button>
+            </div>
+            <p className="text-sm text-on-surface-variant mb-3">Selecciona los productos que tendran este grupo de modificadores:</p>
+            <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
+              {allProducts.map(p => (
+                <label key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-container-low cursor-pointer">
+                  <input type="checkbox" checked={selectedProductIds.includes(p.id)} onChange={() => setSelectedProductIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} className="w-4 h-4 accent-primary-container" />
+                  <span className="text-sm text-on-surface">{p.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setAssignModalOpen(false)} className="btn-ghost text-[0.75rem] py-1.5">Cancelar</button>
+              <button onClick={handleSaveAssignment} className="btn-primary text-[0.75rem] py-1.5">
+                <span className="material-symbols-outlined text-[16px]">save</span> Guardar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

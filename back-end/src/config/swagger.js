@@ -90,6 +90,9 @@ const options = {
                         description: { type: 'string', example: 'Clasificacion de productos del menu' },
                         sort_order: { type: 'integer', example: 1 },
                         active: { type: 'boolean', example: true },
+                        is_modifier: { type: 'boolean', example: false },
+                        required: { type: 'boolean', example: false },
+                        max_selections: { type: 'integer', example: 1 },
                         item_count: { type: 'integer', example: 5 },
                         created_at: { type: 'string', format: 'date-time' },
                         updated_at: { type: 'string', format: 'date-time' }
@@ -106,6 +109,7 @@ const options = {
                         color: { type: 'string', example: '#543310' },
                         parent_id: { type: 'integer', nullable: true, example: null },
                         sort_order: { type: 'integer', example: 1 },
+                        price_adjustment: { type: 'number', format: 'float', example: 0 },
                         active: { type: 'boolean', example: true },
                         parent_name: { type: 'string', nullable: true },
                         created_at: { type: 'string', format: 'date-time' },
@@ -119,7 +123,10 @@ const options = {
                         name: { type: 'string', example: 'Categorias de Producto' },
                         slug: { type: 'string', example: 'categorias_producto' },
                         description: { type: 'string', example: 'Clasificacion de productos del menu' },
-                        sort_order: { type: 'integer', example: 1 }
+                        sort_order: { type: 'integer', example: 1 },
+                        is_modifier: { type: 'boolean', example: false },
+                        required: { type: 'boolean', example: false },
+                        max_selections: { type: 'integer', example: 1 }
                     }
                 },
                 CreateCatalogItemRequest: {
@@ -132,7 +139,8 @@ const options = {
                         icon: { type: 'string', example: 'local_cafe' },
                         color: { type: 'string', example: '#543310' },
                         parent_id: { type: 'integer', example: null },
-                        sort_order: { type: 'integer', example: 1 }
+                        sort_order: { type: 'integer', example: 1 },
+                        price_adjustment: { type: 'number', format: 'float', example: 0 }
                     }
                 },
                 Product: {
@@ -164,53 +172,6 @@ const options = {
                         description: { type: 'string', example: 'Suave y aromatico' },
                         badge: { type: 'string', example: 'Popular' },
                         sort_order: { type: 'integer', example: 1 }
-                    }
-                },
-                ModifierGroup: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer', example: 1 },
-                        name: { type: 'string', example: 'Tipo de Leche' },
-                        required: { type: 'boolean', example: false },
-                        max_selections: { type: 'integer', example: 1 },
-                        display_order: { type: 'integer', example: 1 },
-                        active: { type: 'boolean', example: true },
-                        option_count: { type: 'integer', example: 6 },
-                        created_at: { type: 'string', format: 'date-time' },
-                        updated_at: { type: 'string', format: 'date-time' }
-                    }
-                },
-                ModifierOption: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer', example: 1 },
-                        group_id: { type: 'integer', example: 1 },
-                        name: { type: 'string', example: 'Avena' },
-                        price_adjustment: { type: 'number', format: 'float', example: 4.00 },
-                        display_order: { type: 'integer', example: 3 },
-                        active: { type: 'boolean', example: true },
-                        created_at: { type: 'string', format: 'date-time' },
-                        updated_at: { type: 'string', format: 'date-time' }
-                    }
-                },
-                CreateModifierGroupRequest: {
-                    type: 'object',
-                    required: ['name'],
-                    properties: {
-                        name: { type: 'string', example: 'Tipo de Leche' },
-                        required: { type: 'boolean', example: false },
-                        max_selections: { type: 'integer', example: 1 },
-                        display_order: { type: 'integer', example: 1 }
-                    }
-                },
-                CreateModifierOptionRequest: {
-                    type: 'object',
-                    required: ['group_id', 'name'],
-                    properties: {
-                        group_id: { type: 'integer', example: 1 },
-                        name: { type: 'string', example: 'Avena' },
-                        price_adjustment: { type: 'number', format: 'float', example: 4.00 },
-                        display_order: { type: 'integer', example: 3 }
                     }
                 },
                 AssignProductModifiersRequest: {

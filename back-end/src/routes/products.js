@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, adminOnly } from '../middleware/auth.js';
 import { uploadProductImage } from '../middleware/upload.js';
 
-export function createProductRouter(productController, tokenService, modifierController) {
+export function createProductRouter(productController, tokenService, catalogController) {
     const router = Router();
 
     router.get('/',
@@ -39,16 +39,16 @@ export function createProductRouter(productController, tokenService, modifierCon
     // MODIFICADORES POR PRODUCTO
     // ========================
 
-    if (modifierController) {
+    if (catalogController) {
         router.get('/:id/modifiers',
             authenticate(tokenService),
-            (req, res) => modifierController.getProductModifiers(req, res)
+            (req, res) => catalogController.getProductModifiers(req, res)
         );
 
         router.put('/:id/modifiers',
             authenticate(tokenService),
             adminOnly,
-            (req, res) => modifierController.assignProductModifiers(req, res)
+            (req, res) => catalogController.assignProductModifiers(req, res)
         );
     }
 

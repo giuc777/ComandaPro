@@ -10,7 +10,7 @@ const MOCK_GROUPS = [
   { id: 5, name: 'Ingredientes Principales', slug: 'ingredientes_principales', description: 'Base de ingredientes para recetas', icon: 'eco', color: '#002b26', item_count: 6, sort_order: 5 },
 ];
 
-const EMPTY_GROUP = { name: '', slug: '', description: '', icon: 'category', color: '#543310', sort_order: 0 };
+const EMPTY_GROUP = { name: '', slug: '', description: '', icon: 'category', color: '#543310', sort_order: 0, is_modifier: false, required: false, max_selections: 1 };
 
 function slugify(text) {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -61,6 +61,8 @@ export default function CatalogosPage() {
       name: group.name || '', slug: group.slug || '',
       description: group.description || '', icon: group.icon || 'category',
       color: group.color || '#543310', sort_order: group.sort_order || 0,
+      is_modifier: group.is_modifier || false, required: group.required || false,
+      max_selections: group.max_selections || 1,
     });
     setModalOpen(true);
   }
@@ -73,9 +75,9 @@ export default function CatalogosPage() {
     if (useApi) {
       try {
         if (editingGroup) {
-          await api.updateCatalogGroup(editingGroup.id, { name: form.name, description: form.description, sort_order: form.sort_order, active: true });
+          await api.updateCatalogGroup(editingGroup.id, { ...form, active: true });
         } else {
-          await api.createCatalogGroup({ name: form.name, slug, description: form.description, sort_order: form.sort_order });
+          await api.createCatalogGroup({ ...form, slug });
         }
         const data = await api.getCatalogGroups();
         setGroups(data);
@@ -150,7 +152,12 @@ export default function CatalogosPage() {
                     <span className="material-symbols-outlined text-on-surface-variant text-[16px]">edit</span>
                   </button>
                 </div>
-                <h3 className="font-display text-[0.9375rem] text-on-surface font-semibold mb-1">{group.name}</h3>
+                <h3 className="font-display text-[0.9375rem] text-on-surface font-semibold mb-1">
+                  {group.name}
+                  {group.is_modifier && (
+                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[0.625rem] font-bold uppercase">Modificador</span>
+                  )}
+                </h3>
                 <p className="text-[0.75rem] text-on-surface-variant line-clamp-2 mb-3">{group.description || 'Sin descripcion'}</p>
                 <div className="flex items-center justify-between pt-3 border-t border-outline-variant/10">
                   <div className="flex items-center gap-1.5">
@@ -188,6 +195,22 @@ export default function CatalogosPage() {
                 <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Slug</label>
                 <input type="text" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} className="input-field font-mono" placeholder="menu_cafe" />
               </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="group-modifier" checked={form.is_modifier} onChange={e => setForm(f => ({ ...f, is_modifier: e.target.checked }))} className="w-4 h-4 accent-primary-container" />
+                <label htmlFor="group-modifier" className="text-sm text-on-surface-variant font-semibold">Grupo de modificadores (POS)</label>
+              </div>
+              {form.is_modifier && (
+                <div className="grid grid-cols-2 gap-3 bg-surface-container-low rounded-xl p-3">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="group-required" checked={form.required} onChange={e => setForm(f => ({ ...f, required: e.target.checked }))} className="w-4 h-4 accent-primary-container" />
+                    <label htmlFor="group-required" className="text-sm text-on-surface-variant">Requerido</label>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1 font-semibold">Max selecciones</label>
+                    <input type="number" min="1" max="10" value={form.max_selections} onChange={e => setForm(f => ({ ...f, max_selections: Number(e.target.value) }))} className="input-field" />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Descripcion</label>
                 <input type="text" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="input-field" placeholder="Descripcion del grupo" />
