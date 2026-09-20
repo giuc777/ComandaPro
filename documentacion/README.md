@@ -8,7 +8,7 @@
 | [FASE 02](fases/FASE_02_productos_categorias.md) | Productos y Categorías | ✅ Completada | FASE 01 |
 | [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ✅ Completada | FASE 02 |
-| [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ⬜ Pendiente | FASE 02, 03 |
+| [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ✅ Completada | FASE 02, 03 |
 | [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | 🚧 Próximamente (fuera de alcance) | FASE 04 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ⬜ Pendiente | FASE 04 |
 | [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ⬜ Pendiente | FASE 02, **04, 06** |
@@ -25,26 +25,27 @@
 ```
 Fase 1 (Auth)
     │
-    ├──→ Fase 2 (Productos)
-    │        │
-     │        └──→ Fase 2B (Catálogos + Modificadores) ✅
-     │
-     ├──→ Fase 3 (Órdenes POS)
-     │        │
-     │        ├──→ Fase 4 (KDS) 🚧 Próximamente
-     │        ├──→ Fase 5 (Pagos)
-     │        │        │
-     │        │        ├──→ Fase 6 (Inventario + Recetas)
-     │        │        │        │
-     │        │        │        └──→ Fase 7 (Proveedores)
-     │        │        │
-     │        │        └──→ Fase 8 (Turnos)
-     │        │                 │
-     │        │                 └──→ Fase 9 (Reportes)
-     │        │
-     │        └──→ Fase 10 (Mesas)
-     │
-     └──→ Fase 11 (Testing + Deploy)
+    └──→ Fase 2 (Productos)
+             │
+             ├──→ Fase 2B (Catálogos + Modificadores) ✅
+             ├──→ Fase 3 (Modificadores unificados) ✅
+             │
+             └──→ Fase 4 (Órdenes POS) ✅
+                      │
+                      ├──→ Fase 5 (KDS) 🚧 Próximamente
+                      ├──→ Fase 6 (Pagos)
+                      │        │
+                      │        ├──→ Fase 7 (Inventario + Recetas)
+                      │        │        │
+                      │        │        └──→ Fase 8 (Proveedores)
+                      │        │
+                      │        └──→ Fase 10 (Turnos)
+                      │                 │
+                      │                 └──→ Fase 11 (Reportes)
+                      │
+                      └──→ Fase 9 (Mesas)
+
+Fase 12 (Testing + Deploy) — requiere todas las fases
 ```
 
 > **Nota:** Los modificadores (extras de precio, grupos requeridos, etc.) se
@@ -52,7 +53,7 @@ Fase 1 (Auth)
 > La tabla `modifier_groups` fue eliminada; los grupos de modificadores viven en
 > `catalog_groups` y se asignan a productos vía `product_modifier_groups`.
 
-> **Nota:** Fase 6 (Inventario + Recetas) depende de Fase 3 (Órdenes) y Fase 5
+> **Nota:** Fase 7 (Inventario + Recetas) depende de Fase 4 (Órdenes) y Fase 6
 > (Pagos) porque la deducción de inventario es **obligatoria y automática** al
 > cobrar, ejecutándose dentro de la transacción de pago.
 

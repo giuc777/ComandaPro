@@ -283,5 +283,66 @@ export const api = {
             body: JSON.stringify({ group_ids: groupIds })
         });
         return response.json();
+    },
+
+    // ========================
+    // TABLES
+    // ========================
+
+    async getTables() {
+        const response = await fetchWithAuth('/tables');
+        return response.json();
+    },
+
+    // ========================
+    // ORDERS
+    // ========================
+
+    async getParkedOrders() {
+        const response = await fetchWithAuth('/orders?status=pausada');
+        return response.json();
+    },
+
+    async getOrder(id) {
+        const response = await fetchWithAuth(`/orders/${id}`);
+        return response.json();
+    },
+
+    async createOrder(data) {
+        const response = await fetchWithAuth('/orders', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async updateOrder(id, data) {
+        const response = await fetchWithAuth(`/orders/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async voidOrder(id) {
+        const response = await fetchWithAuth(`/orders/${id}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    },
+
+    async addOrderItem(orderId, data) {
+        const response = await fetchWithAuth(`/orders/${orderId}/items`, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async deleteOrderItem(orderId, itemId) {
+        const response = await fetchWithAuth(`/orders/${orderId}/items/${itemId}`, {
+            method: 'DELETE'
+        });
+        return response.json();
     }
 };

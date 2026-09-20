@@ -316,13 +316,46 @@ test('flujo POS: crear orden y pausarla', async ({ page }) => {
 
 ## 6. Criterios de Aceptación
 
-- [ ] Se puede crear orden con **mesa** o **para llevar**
-- [ ] Se captura **nombre de cliente**; si está vacío se usa etiqueta automática
-- [ ] Ítems se agregan al ticket con precio correcto
-- [ ] Modificadores se guardan y muestran correctamente
-- [ ] **Pausar Orden** guarda la orden con status `pausada`
-- [ ] El panel de **Órdenes Pausadas** lista las órdenes por nombre de cliente
-- [ ] Se puede **retomar** una orden pausada para editarla
-- [ ] Se puede **anular** una orden (no pagadas)
-- [ ] **NO** se envía la orden a cocina (fuera de alcance)
-- [ ] KDS permanece como "Próximamente"
+- [x] Se puede crear orden con **mesa** o **para llevar**
+- [x] Se captura **nombre de cliente**; si está vacío se usa etiqueta automática
+- [x] Ítems se agregan al ticket con precio correcto
+- [x] Modificadores se guardan y muestran correctamente
+- [x] **Pausar Orden** guarda la orden con status `pausada`
+- [x] El panel de **Órdenes Pausadas** lista las órdenes por nombre de cliente
+- [x] Se puede **retomar** una orden pausada para editarla
+- [x] Se puede **anular** una orden (no pagadas)
+- [x] **NO** se envía la orden a cocina (fuera de alcance)
+- [x] KDS permanece como "Próximamente"
+
+---
+
+## 7. Notas de Implementación
+
+### Persistencia del ticket (modelo elegido)
+El ticket se construye en estado de React (`hooks/useOrder.js`). Al **Pausar** se
+envía la orden completa con todos sus ítems en **una sola transacción**
+(`orderController.createOrder`), evitando órdenes huérfanas y peticiones
+encadenadas. Al **Retomar**, se recarga la orden y se edita; guardar usa
+`PUT /api/orders/:id` que **reemplaza** los ítems (`sp_clear_order_items` + inserción).
+
+### Endpoints extra (más allá del spec)
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/tables` | Lista de mesas para el selector (FASE 09 hará el CRUD completo) |
+
+`POST /api/orders` acepta un arreglo opcional `items[]` para crear la orden con
+sus ítems en una transacción. `PUT /api/orders/:id` acepta `items[]` opcional
+para reemplazar los ítems.
+
+### Datos de mesas
+La tabla `tables` se sembró con 8 mesas alineadas al catálogo `mesas`
+(grupo 8): Mesa 1-3, Terraza A/B, Barra Principal, Sala Privada, Area de Estudio.
+FASE 09 (Mesas) reconciliará el modelo completo.
+
+### Botón Cobrar
+Por ahora navega a `/caja?order=<id>` (stub). FASE 06 implementará el cobro real.
+
+### Base de datos
+- Migración: `database/migrations/006_fase4_orders.sql`
+- Procedimientos: `database/procedures/006_order_procedures.sql`
+- IVA: 12% (hardcoded en `sp_recalculate_order_totals`, coincide con el frontend)

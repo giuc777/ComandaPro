@@ -196,6 +196,95 @@ const options = {
                         option_name: { type: 'string', example: 'Entera' },
                         price_adjustment: { type: 'number', format: 'float', example: 0 }
                     }
+                },
+
+                // ========================
+                // ORDERS (FASE 04)
+                // ========================
+
+                Order: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1049 },
+                        status: { type: 'string', enum: ['pausada','pagada','anulada','enviada','preparando','lista','completada'], example: 'pausada' },
+                        table_id: { type: 'integer', nullable: true, example: 4 },
+                        table_name: { type: 'string', nullable: true, example: 'Terraza A' },
+                        customer_name: { type: 'string', nullable: true, example: 'Ana G.' },
+                        mode: { type: 'string', enum: ['mesa','llevar'], example: 'mesa' },
+                        notes: { type: 'string', nullable: true },
+                        subtotal: { type: 'number', format: 'float', example: 72.00 },
+                        tax: { type: 'number', format: 'float', example: 8.64 },
+                        total: { type: 'number', format: 'float', example: 80.64 },
+                        created_by: { type: 'integer', nullable: true, example: 1 },
+                        created_by_name: { type: 'string', nullable: true, example: 'Mateo Rodriguez' },
+                        parked_at: { type: 'string', format: 'date-time', nullable: true },
+                        voided_at: { type: 'string', format: 'date-time', nullable: true },
+                        minutes_parked: { type: 'integer', example: 5 },
+                        item_count: { type: 'integer', example: 3 },
+                        total_units: { type: 'integer', example: 4 },
+                        items: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/OrderItem' }
+                        }
+                    }
+                },
+                OrderItem: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        product_id: { type: 'integer', example: 5 },
+                        product_name: { type: 'string', example: 'Latte Vainilla' },
+                        product_image: { type: 'string', nullable: true, example: 'latte.jpg' },
+                        quantity: { type: 'integer', example: 1 },
+                        unit_price: { type: 'number', format: 'float', example: 32.00 },
+                        modifiers: { type: 'string', nullable: true, example: '[12,38]' },
+                        modifier_labels: { type: 'string', nullable: true, example: 'Avena, Grande' },
+                        notes: { type: 'string', nullable: true },
+                        created_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                CreateOrderRequest: {
+                    type: 'object',
+                    properties: {
+                        table_id: { type: 'integer', nullable: true, example: 4 },
+                        customer_name: { type: 'string', nullable: true, example: 'Ana G.' },
+                        mode: { type: 'string', enum: ['mesa','llevar'], example: 'mesa' },
+                        notes: { type: 'string', nullable: true },
+                        items: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    product_id: { type: 'integer', example: 5 },
+                                    quantity: { type: 'integer', example: 1 },
+                                    unit_price: { type: 'number', format: 'float', example: 32.00 },
+                                    modifiers: { type: 'string', nullable: true, example: '[12,38]' },
+                                    modifier_labels: { type: 'string', nullable: true, example: 'Avena, Grande' },
+                                    notes: { type: 'string', nullable: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                Table: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Mesa 1' },
+                        capacity: { type: 'integer', example: 4 },
+                        status: { type: 'string', enum: ['free','occupied','dirty'], example: 'free' },
+                        current_order_id: { type: 'integer', nullable: true }
+                    }
+                },
+
+                // ========================
+                // ERROR
+                // ========================
+                Error: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string', example: 'Error del servidor' }
+                    }
                 }
             }
         }
