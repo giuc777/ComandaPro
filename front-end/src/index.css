@@ -113,7 +113,7 @@
   pointer-events: auto;
 }
 .modal-content {
-  background: var(--md-sys-color-surface-container-lowest);
+  background: #e7ecef;
   border-radius: 1.5rem;
   padding: 1.5rem;
   box-shadow: 0 8px 32px rgba(0,0,0,0.25);
