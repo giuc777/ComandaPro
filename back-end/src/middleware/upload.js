@@ -1,6 +1,12 @@
 import multer from 'multer';
 import { randomUUID } from 'crypto';
-import { extname } from 'path';
+import { extname, join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const UPLOADS_DIR = join(__dirname, '..', '..', 'uploads', 'products');
 
 const ALLOWED_TYPES = {
     'image/jpeg': 'jpg',
@@ -11,7 +17,7 @@ const ALLOWED_TYPES = {
 };
 
 const storage = multer.diskStorage({
-    destination: 'uploads/products/',
+    destination: UPLOADS_DIR,
     filename: (req, file, cb) => {
         const uniqueName = `${randomUUID()}${extname(file.originalname)}`;
         cb(null, uniqueName);

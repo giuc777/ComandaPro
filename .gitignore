@@ -38,3 +38,7 @@ coverage/
 # Misc
 *.tgz
 .cache/
+
+# Uploads (user-generated files)
+uploads/
+back-end/uploads/

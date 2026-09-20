@@ -26,7 +26,7 @@ app.use(cors());
 app.use(express.json());
 
 // Servir archivos estaticos (imagenes de productos)
-app.use('/uploads', express.static(join(__dirname, '..', '..', 'uploads')));
+app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     customCss: '.swagger-ui .topbar { display: none }',
