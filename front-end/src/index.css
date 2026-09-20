@@ -113,6 +113,12 @@
   pointer-events: auto;
 }
 .modal-content {
+  background: var(--md-sys-color-surface-container-lowest);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  max-height: 90vh;
+  overflow-y: auto;
   transform: translateY(16px) scale(0.97);
   transition: transform 0.2s ease;
 }
