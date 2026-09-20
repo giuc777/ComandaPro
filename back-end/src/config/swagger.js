@@ -165,6 +165,76 @@ const options = {
                         badge: { type: 'string', example: 'Popular' },
                         sort_order: { type: 'integer', example: 1 }
                     }
+                },
+                ModifierGroup: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Tipo de Leche' },
+                        required: { type: 'boolean', example: false },
+                        max_selections: { type: 'integer', example: 1 },
+                        display_order: { type: 'integer', example: 1 },
+                        active: { type: 'boolean', example: true },
+                        option_count: { type: 'integer', example: 6 },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                ModifierOption: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        group_id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Avena' },
+                        price_adjustment: { type: 'number', format: 'float', example: 4.00 },
+                        display_order: { type: 'integer', example: 3 },
+                        active: { type: 'boolean', example: true },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                CreateModifierGroupRequest: {
+                    type: 'object',
+                    required: ['name'],
+                    properties: {
+                        name: { type: 'string', example: 'Tipo de Leche' },
+                        required: { type: 'boolean', example: false },
+                        max_selections: { type: 'integer', example: 1 },
+                        display_order: { type: 'integer', example: 1 }
+                    }
+                },
+                CreateModifierOptionRequest: {
+                    type: 'object',
+                    required: ['group_id', 'name'],
+                    properties: {
+                        group_id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Avena' },
+                        price_adjustment: { type: 'number', format: 'float', example: 4.00 },
+                        display_order: { type: 'integer', example: 3 }
+                    }
+                },
+                AssignProductModifiersRequest: {
+                    type: 'object',
+                    required: ['group_ids'],
+                    properties: {
+                        group_ids: {
+                            type: 'array',
+                            items: { type: 'integer' },
+                            example: [1, 2, 3]
+                        }
+                    }
+                },
+                ProductModifierAssignment: {
+                    type: 'object',
+                    properties: {
+                        group_id: { type: 'integer', example: 1 },
+                        group_name: { type: 'string', example: 'Tipo de Leche' },
+                        required: { type: 'boolean', example: false },
+                        max_selections: { type: 'integer', example: 1 },
+                        option_id: { type: 'integer', example: 1 },
+                        option_name: { type: 'string', example: 'Entera' },
+                        price_adjustment: { type: 'number', format: 'float', example: 0 }
+                    }
                 }
             }
         }

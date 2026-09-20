@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, adminOnly } from '../middleware/auth.js';
 import { uploadProductImage } from '../middleware/upload.js';
 
-export function createProductRouter(productController, tokenService) {
+export function createProductRouter(productController, tokenService, modifierController) {
     const router = Router();
 
     router.get('/',
@@ -34,6 +34,23 @@ export function createProductRouter(productController, tokenService) {
         adminOnly,
         (req, res) => productController.deleteProduct(req, res)
     );
+
+    // ========================
+    // MODIFICADORES POR PRODUCTO
+    // ========================
+
+    if (modifierController) {
+        router.get('/:id/modifiers',
+            authenticate(tokenService),
+            (req, res) => modifierController.getProductModifiers(req, res)
+        );
+
+        router.put('/:id/modifiers',
+            authenticate(tokenService),
+            adminOnly,
+            (req, res) => modifierController.assignProductModifiers(req, res)
+        );
+    }
 
     return router;
 }

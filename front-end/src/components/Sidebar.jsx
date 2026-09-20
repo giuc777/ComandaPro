@@ -7,6 +7,7 @@ export default function Sidebar({ user, onLogout }) {
     { to: '/kds', icon: 'coffee_maker', label: 'Cocina KDS' },
     { to: '/caja', icon: 'savings', label: 'Caja' },
     { to: '/productos', icon: 'local_cafe', label: 'Productos' },
+    { to: '/modificadores', icon: 'tune', label: 'Modificadores' },
     { to: '/inventario', icon: 'inventory_2', label: 'Inventario' },
     { to: '/proveedores', icon: 'local_shipping', label: 'Proveedores' },
     { to: '/catalogos', icon: 'category', label: 'Catalogos' },

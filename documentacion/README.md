@@ -4,10 +4,10 @@
 
 | Fase | Nombre | Estado | Dependencias |
 |------|--------|--------|--------------|
-| [FASE 01](fases/FASE_01_auth_usuarios.md) | Autenticación y Usuarios | ⬜ Pendiente | — |
-| [FASE 02](fases/FASE_02_productos_categorias.md) | Productos y Categorías | ⬜ Pendiente | FASE 01 |
+| [FASE 01](fases/FASE_01_auth_usuarios.md) | Autenticación y Usuarios | ✅ Completada | — |
+| [FASE 02](fases/FASE_02_productos_categorias.md) | Productos y Categorías | ✅ Completada | FASE 01 |
 | [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
-| [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ⬜ Pendiente | FASE 02 |
+| [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ✅ Completada | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ⬜ Pendiente | FASE 02, 03 |
 | [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | 🚧 Próximamente (fuera de alcance) | FASE 04 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ⬜ Pendiente | FASE 04 |
