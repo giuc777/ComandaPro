@@ -9,7 +9,7 @@
 | [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ⬜ Pendiente | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ⬜ Pendiente | FASE 02, 03 |
-| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | ⬜ Pendiente | FASE 04 |
+| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | 🚧 Próximamente (fuera de alcance) | FASE 04 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ⬜ Pendiente | FASE 04 |
 | [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ⬜ Pendiente | FASE 02, **04, 06** |
 | [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ⬜ Pendiente | FASE 07 |
@@ -33,7 +33,7 @@ Fase 1 (Auth)
     │                 │
     │                 └──→ Fase 4 (Órdenes POS)
     │                          │
-    │                          ├──→ Fase 5 (KDS)
+    │                          ├──→ Fase 5 (KDS) 🚧 Próximamente
     │                          ├──→ Fase 6 (Pagos)
     │                          │        │
     │                          │        ├──→ Fase 7 (Inventario + Recetas)
@@ -52,6 +52,12 @@ Fase 1 (Auth)
 > **Nota:** Fase 7 (Inventario + Recetas) depende de Fase 4 (Órdenes) y Fase 6
 > (Pagos) porque la deducción de inventario es **obligatoria y automática** al
 > cobrar, ejecutándose dentro de la transacción de pago.
+
+> **Nota (flujo actual sin KDS):** Fase 5 (KDS) queda **fuera de alcance por
+> ahora** y la página se muestra como "Próximamente". Mientras tanto, el POS
+> **no envía órdenes a cocina**: las **pausa** (status `pausada`) con nombre de
+> cliente y mesa, se listan para su identificación y luego se **cobran
+> manualmente** (Fase 6). Ver FASE_04 para el detalle.
 
 ---
 

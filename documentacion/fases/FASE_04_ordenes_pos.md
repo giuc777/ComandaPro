@@ -1,7 +1,40 @@
 # Fase 4: Órdenes y Terminal POS
 
 ## Objetivo
-Implementar el flujo completo de órdenes: crear, enviar a cocina, gestionar estado, y el terminal POS completo.
+Implementar el flujo de órdenes del terminal POS: crear orden, agregar productos,
+**pausar la orden** y gestionar las órdenes pausadas para su posterior cobro.
+
+---
+
+## ⚠️ Alcance actual (KDS NO implementado)
+
+Por ahora **el módulo de cocina (KDS) no está implementado**. En consecuencia:
+
+- El POS **NO envía la orden a cocina**.
+- El POS **pausa la orden** (status `pausada`) y le asocia un **nombre de cliente**
+  (si no se captura, se genera una etiqueta automática tipo `Orden #1049`).
+- Las órdenes pausadas se **listan** para identificarlas por nombre de cliente.
+- Desde la lista se puede **retomar** (editar) o **cobrar**.
+- El cobro se registra **manualmente** (ver FASE_06).
+
+El envío a cocina y los estados `enviada / preparando / lista / completada` quedan
+**documentados para el futuro** en FASE_05, pero **fuera del alcance actual**.
+
+---
+
+## Estados de Orden (en español)
+
+| Estado | Descripción | Disponible ahora |
+|--------|-------------|------------------|
+| `pausada` | Orden pausada, pendiente de cobro | ✅ Sí |
+| `pagada` | Orden cobrada | ✅ Sí |
+| `anulada` | Orden cancelada | ✅ Sí |
+| `enviada` | Enviada a cocina | ⏳ Futuro (KDS) |
+| `preparando` | En preparación en cocina | ⏳ Futuro (KDS) |
+| `lista` | Lista para entregar | ⏳ Futuro (KDS) |
+| `completada` | Entregada / completada | ⏳ Futuro (KDS) |
+
+> El status por defecto al crear una orden es `pausada`.
 
 ---
 
@@ -9,70 +42,52 @@ Implementar el flujo completo de órdenes: crear, enviar a cocina, gestionar est
 
 ```sql
 -- ============================================
--- FASE 4: Órdenes
+-- FASE 4: Órdenes (flujo de pausado)
 -- ============================================
 
-CREATE TABLE orders (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    status ENUM('received', 'preparing', 'ready', 'completed', 'paid', 'voided', 'refunded') DEFAULT 'received',
-    table_id INT,
-    customer_name VARCHAR(100),
-    mode ENUM('dine-in', 'takeaway') DEFAULT 'dine-in',
-    notes TEXT,
-    subtotal DECIMAL(10,2) DEFAULT 0,
-    tax DECIMAL(10,2) DEFAULT 0,
-    total DECIMAL(10,2) DEFAULT 0,
-    created_by INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    ready_at TIMESTAMP NULL,
-    voided_at TIMESTAMP NULL,
-    voided_by INT NULL,
-    FOREIGN KEY (table_id) REFERENCES tables(id) ON DELETE SET NULL,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
-);
+-- La tabla orders ya existe (01_create_tables.sql). Se migra su status a español
+-- y se agregan los campos necesarios para el pausado.
+ALTER TABLE orders MODIFY COLUMN status
+    ENUM('pausada','pagada','anulada',
+         'enviada','preparando','lista','completada')
+    DEFAULT 'pausada';
 
-CREATE TABLE order_items (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    order_id INT NOT NULL,
-    product_id INT NOT NULL,
-    quantity INT NOT NULL DEFAULT 1,
-    unit_price DECIMAL(10,2) NOT NULL,
-    modifiers JSON,
-    modifier_labels TEXT,
-    notes TEXT,
-    sent BOOLEAN DEFAULT FALSE,
-    sent_at TIMESTAMP NULL,
-    prepared_at TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
-);
+ALTER TABLE orders
+    ADD COLUMN mode ENUM('mesa','llevar') DEFAULT 'mesa' AFTER customer_name,
+    ADD COLUMN created_by INT NULL AFTER total,
+    ADD COLUMN parked_at TIMESTAMP NULL AFTER created_by,
+    ADD COLUMN voided_at TIMESTAMP NULL AFTER parked_at,
+    ADD COLUMN voided_by INT NULL AFTER voided_at,
+    ADD CONSTRAINT fk_orders_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    ADD CONSTRAINT fk_orders_voided_by FOREIGN KEY (voided_by) REFERENCES users(id) ON DELETE SET NULL;
 
--- Índices
+-- Indices
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_table ON orders(table_id);
+CREATE INDEX idx_orders_parked ON orders(status, parked_at);
 CREATE INDEX idx_orders_created ON orders(created_at);
-CREATE INDEX idx_order_items_order ON order_items(order_id);
 ```
+
+> La tabla `order_items` ya existe. Para el pausado **no requiere cambios**.
+> Los campos de cocina (`sent`, `sent_at`, `prepared_at`) se agregarán en FASE_05.
 
 ---
 
 ## 2. Procedimientos Almacenados
 
 ```sql
--- Crear orden
+-- Crear orden pausada
 DELIMITER //
-CREATE PROCEDURE sp_create_order(
+CREATE PROCEDURE sp_create_parked_order(
     IN p_table_id INT,
     IN p_customer_name VARCHAR(100),
-    IN p_mode ENUM('dine-in', 'takeaway'),
+    IN p_mode ENUM('mesa','llevar'),
     IN p_notes TEXT,
     IN p_created_by INT
 )
 BEGIN
-    INSERT INTO orders (table_id, customer_name, mode, notes, created_by)
-    VALUES (p_table_id, p_customer_name, p_mode, p_notes, p_created_by);
+    INSERT INTO orders (table_id, customer_name, mode, notes, created_by, status, parked_at)
+    VALUES (p_table_id, p_customer_name, p_mode, p_notes, p_created_by, 'pausada', CURRENT_TIMESTAMP);
 
     SELECT LAST_INSERT_ID() AS order_id;
 END //
@@ -93,7 +108,6 @@ BEGIN
     INSERT INTO order_items (order_id, product_id, quantity, unit_price, modifiers, modifier_labels, notes)
     VALUES (p_order_id, p_product_id, p_quantity, p_unit_price, p_modifiers, p_modifier_labels, p_notes);
 
-    -- Actualizar totales de la orden
     CALL sp_recalculate_order_totals(p_order_id);
 
     SELECT LAST_INSERT_ID() AS item_id;
@@ -118,68 +132,77 @@ BEGIN
 END //
 DELIMITER ;
 
--- Enviar a cocina (marcar items como sent)
+-- Listar órdenes pausadas (para el panel de pausadas)
 DELIMITER //
-CREATE PROCEDURE sp_send_to_kitchen(IN p_order_id INT)
-BEGIN
-    UPDATE order_items
-    SET sent = TRUE, sent_at = CURRENT_TIMESTAMP
-    WHERE order_id = p_order_id AND sent = FALSE;
-
-    -- Si la orden es nueva, crearla con status received
-    UPDATE orders SET status = 'received' WHERE id = p_order_id AND status IS NULL;
-END //
-DELIMITER ;
-
--- Actualizar estado de orden
-DELIMITER //
-CREATE PROCEDURE sp_update_order_status(
-    IN p_order_id INT,
-    IN p_new_status ENUM('received', 'preparing', 'ready', 'completed', 'paid', 'voided')
-)
-BEGIN
-    UPDATE orders SET status = p_new_status WHERE id = p_order_id;
-
-    IF p_new_status = 'preparing' THEN
-        UPDATE order_items SET prepared_at = CURRENT_TIMESTAMP
-        WHERE order_id = p_order_id AND prepared_at IS NULL;
-    END IF;
-
-    IF p_new_status = 'ready' THEN
-        UPDATE orders SET ready_at = CURRENT_TIMESTAMP WHERE id = p_order_id;
-    END IF;
-END //
-DELIMITER ;
-
--- Obtener órdenes por status (para KDS)
-DELIMITER //
-CREATE PROCEDURE sp_get_orders_by_status(IN p_status VARCHAR(20))
+CREATE PROCEDURE sp_list_parked_orders()
 BEGIN
     SELECT o.id, o.status, o.table_id, t.name AS table_name,
-           o.customer_name, o.mode, o.notes, o.created_at, o.ready_at,
-           u.name AS created_by_name,
-           oi.id AS item_id, oi.product_id, p.name AS product_name,
-           oi.quantity, oi.unit_price, oi.modifier_labels, oi.sent, oi.prepared_at
+           o.customer_name, o.mode, o.notes, o.subtotal, o.tax, o.total,
+           o.created_by, u.name AS created_by_name,
+           o.parked_at,
+           TIMESTAMPDIFF(MINUTE, o.parked_at, NOW()) AS minutes_parked,
+           (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
+           (SELECT IFNULL(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = o.id) AS total_units
     FROM orders o
     LEFT JOIN tables t ON o.table_id = t.id
-    JOIN users u ON o.created_by = u.id
-    LEFT JOIN order_items oi ON o.id = oi.order_id
-    LEFT JOIN products p ON oi.product_id = p.id
-    WHERE o.status = p_status
-    ORDER BY o.created_at ASC;
+    LEFT JOIN users u ON o.created_by = u.id
+    WHERE o.status = 'pausada'
+    ORDER BY o.parked_at ASC;
 END //
 DELIMITER ;
 
--- Anular orden
+-- Obtener orden con ítems
+DELIMITER //
+CREATE PROCEDURE sp_get_order(IN p_order_id INT)
+BEGIN
+    SELECT o.id, o.status, o.table_id, t.name AS table_name,
+           o.customer_name, o.mode, o.notes, o.subtotal, o.tax, o.total,
+           o.created_by, o.parked_at, o.voided_at
+    FROM orders o
+    LEFT JOIN tables t ON o.table_id = t.id
+    WHERE o.id = p_order_id;
+
+    SELECT oi.id, oi.product_id, p.name AS product_name,
+           oi.quantity, oi.unit_price, oi.modifiers, oi.modifier_labels, oi.notes
+    FROM order_items oi
+    JOIN products p ON oi.product_id = p.id
+    WHERE oi.order_id = p_order_id;
+END //
+DELIMITER ;
+
+-- Retomar / editar orden pausada
+DELIMITER //
+CREATE PROCEDURE sp_reopen_order(
+    IN p_order_id INT,
+    IN p_table_id INT,
+    IN p_customer_name VARCHAR(100),
+    IN p_mode ENUM('mesa','llevar'),
+    IN p_notes TEXT
+)
+BEGIN
+    UPDATE orders
+    SET table_id = p_table_id,
+        customer_name = p_customer_name,
+        mode = p_mode,
+        notes = p_notes
+    WHERE id = p_order_id AND status = 'pausada' AND status <> 'anulada';
+END //
+DELIMITER ;
+
+-- Anular orden (no se puede anular una ya pagada)
 DELIMITER //
 CREATE PROCEDURE sp_void_order(IN p_order_id INT, IN p_user_id INT)
 BEGIN
     UPDATE orders
-    SET status = 'voided', voided_at = CURRENT_TIMESTAMP, voided_by = p_user_id
-    WHERE id = p_order_id AND status NOT IN ('paid', 'voided', 'refunded');
+    SET status = 'anulada', voided_at = CURRENT_TIMESTAMP, voided_by = p_user_id
+    WHERE id = p_order_id AND status NOT IN ('pagada', 'anulada');
 END //
 DELIMITER ;
 ```
+
+> **Nota:** `sp_send_to_kitchen`, `sp_mark_preparing`, `sp_mark_ready` y
+> `sp_mark_completed` **no se implementan por ahora**. Se especifican en FASE_05
+> como trabajo futuro.
 
 ---
 
@@ -187,15 +210,15 @@ DELIMITER ;
 
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| `POST` | `/api/orders` | Crear orden | Sí |
-| `GET` | `/api/orders` | Listar órdenes (?status=) | Sí |
+| `POST` | `/api/orders` | Crear orden (status `pausada`) | Sí |
+| `GET` | `/api/orders?status=pausada` | **Listar órdenes pausadas** | Sí |
 | `GET` | `/api/orders/:id` | Obtener orden con ítems | Sí |
 | `POST` | `/api/orders/:id/items` | Agregar ítem | Sí |
 | `DELETE` | `/api/orders/:id/items/:itemId` | Quitar ítem | Sí |
-| `POST` | `/api/orders/:id/send` | Enviar a cocina | Sí |
-| `PUT` | `/api/orders/:id/status` | Cambiar estado | Sí |
+| `PUT` | `/api/orders/:id` | Retomar/editar orden pausada | Sí |
 | `DELETE` | `/api/orders/:id` | Anular orden | Sí |
-| `GET` | `/api/orders/table/:tableId` | Orden activa de mesa | Sí |
+
+> `POST /api/orders/:id/send` (**enviar a cocina**) **se omite** por ahora.
 
 ---
 
@@ -204,27 +227,60 @@ DELIMITER ;
 ```
 front-end/src/
 ├── pages/
-│   └── POSPage.jsx
+│   └── PosPage.jsx
 ├── components/
-│   ├── Ticket.jsx             # Ticket/orden actual
-│   ├── TicketItem.jsx         # Ítem individual en ticket
-│   ├── TableSelector.jsx      # Selector de mesa
-│   ├── OrderModeToggle.jsx    # Dine-in / Takeaway
-│   └── HoldRecallButtons.jsx  # Botones pausar/retomar
+│   ├── Ticket.jsx              # Ticket/orden actual
+│   ├── TicketItem.jsx          # Ítem individual en ticket
+│   ├── TableSelector.jsx       # Selector de mesa
+│   ├── OrderModeToggle.jsx     # Mesa / Para Llevar
+│   ├── ParkedOrdersPanel.jsx   # Lista de órdenes pausadas
+│   └── CustomerNameInput.jsx   # Nombre de cliente (opcional)
 ├── hooks/
-│   └── useOrder.js            # Hook de orden actual
+│   └── useOrder.js             # Hook de orden actual
 └── api/
     └── orders.js
 ```
 
-### Flujo POS completo:
+### Flujo POS (actual, sin KDS)
+
 ```
-1. Seleccionar mesa (o takeaway)
-2. Agregar productos → ModifierModal → Ticket
-3. Editar cantidades/eliminar ítems
-4. [Pausar] → guarda en parkedOrders
-5. [Enviar a Cocina] → POST /api/orders/:id/send
-6. Mesa se marca como "occupied"
+1. [Seleccionar mesa] o [Para Llevar]
+2. Capturar [Nombre de Cliente] (opcional → etiqueta automática "Orden #N")
+3. Agregar productos → Ticket
+4. Editar cantidades / eliminar ítems
+5. [Pausar Orden] → POST /api/orders (status 'pausada')
+6. La orden aparece en el panel de Órdenes Pausadas
+7. [Retomar] → recarga el ticket para editar
+8. [Cobrar] → FASE_06 (pago manual) → status 'pagada'
+```
+
+### Layout del POS (pausadas)
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Orden #1049        [En Mesa] [Para Llevar]         │
+│  Cliente: [ Ana G.           ]                       │
+├───────────────────────────────┬─────────────────────┤
+│   Productos                   │   Ticket            │
+│   ┌─────┐ ┌─────┐             │   ┌───────────┐     │
+│   │Prod1│ │Prod2│             │   │ Item 1    │     │
+│   └─────┘ └─────┘             │   │ Item 2    │     │
+│                               │   ├───────────┤     │
+│                               │   │ Subtotal  │     │
+│                               │   │ IVA       │     │
+│                               │   │ Total     │     │
+│                               │   └───────────┘     │
+│                               │   [Pausar Orden]    │
+├───────────────────────────────┴─────────────────────┤
+│  ÓRDENES PAUSADAS (3)                                │
+│  ┌───────────────────────────────────────────────┐  │
+│  │ Ana G.   · 3 items · Q84.00 · hace 5 min      │  │
+│  │ [Retomar] [Cobrar] [Anular]                    │  │
+│  ├───────────────────────────────────────────────┤  │
+│  │ Orden #1050 · 1 item · Q28.00 · hace 2 min     │  │
+│  │ [Retomar] [Cobrar] [Anular]                    │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -233,27 +289,26 @@ front-end/src/
 
 ### Jest:
 ```javascript
-describe('Order System', () => {
-  test('crear orden retorna order_id')
+describe('Order System (pausado)', () => {
+  test('crear orden retorna order_id con status pausada')
   test('agregar ítem actualiza subtotal')
   test('agregar ítem con modificadores calcula precio correcto')
-  test('enviar a cocina marca items como sent')
-  test('anular orden cambia status a voided')
+  test('listar pausadas retorna solo status pausada')
+  test('anular orden cambia status a anulada')
   test('no se puede anular orden ya pagada')
+  test('cliente vacio genera etiqueta automatica')
 })
 ```
 
 ### Playwright:
 ```javascript
-test('flujo completo POS: crear orden y enviar a cocina', async ({ page }) => {
-  await page.goto('/#/pos')
+test('flujo POS: crear orden y pausarla', async ({ page }) => {
+  await page.goto('/pos')
   await page.click('[data-product="latte-vainilla"]')
-  // seleccionar modificadores
-  await page.click('[data-modifier="avena"]')
-  await page.click('.modifier-confirm')
-  // enviar a cocina
-  await page.click('button:has-text("Enviar a Cocina")')
-  await expect(page.locator('.toast-success')).toContainText('Enviado a cocina')
+  await page.fill('[data-testid="customer-name"]', 'Ana G.')
+  await page.click('button:has-text("Pausar Orden")')
+  await expect(page.locator('.toast-success')).toContainText('Orden pausada')
+  await expect(page.locator('.parked-order')).toContainText('Ana G.')
 })
 ```
 
@@ -261,10 +316,13 @@ test('flujo completo POS: crear orden y enviar a cocina', async ({ page }) => {
 
 ## 6. Criterios de Aceptación
 
-- [ ] Se puede crear orden con mesa o takeaway
+- [ ] Se puede crear orden con **mesa** o **para llevar**
+- [ ] Se captura **nombre de cliente**; si está vacío se usa etiqueta automática
 - [ ] Ítems se agregan al ticket con precio correcto
 - [ ] Modificadores se guardan y muestran correctamente
-- [ ] Enviar a cocina cambia status a "received"
-- [ ] KDS puede cambiar status a "preparing" y "ready"
-- [ ] Anular orden libera mesa y cambia status
-- [ ] Hold/Recall funciona para pausar y retomar órdenes
+- [ ] **Pausar Orden** guarda la orden con status `pausada`
+- [ ] El panel de **Órdenes Pausadas** lista las órdenes por nombre de cliente
+- [ ] Se puede **retomar** una orden pausada para editarla
+- [ ] Se puede **anular** una orden (no pagadas)
+- [ ] **NO** se envía la orden a cocina (fuera de alcance)
+- [ ] KDS permanece como "Próximamente"
