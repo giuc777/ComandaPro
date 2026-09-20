@@ -6,6 +6,7 @@
 |------|--------|--------|--------------|
 | [FASE 01](fases/FASE_01_auth_usuarios.md) | Autenticación y Usuarios | ⬜ Pendiente | — |
 | [FASE 02](fases/FASE_02_productos_categorias.md) | Productos y Categorías | ⬜ Pendiente | FASE 01 |
+| [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ⬜ Pendiente | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ⬜ Pendiente | FASE 02, 03 |
 | [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | ⬜ Pendiente | FASE 04 |
@@ -25,6 +26,8 @@
 Fase 1 (Auth)
     │
     ├──→ Fase 2 (Productos)
+    │        │
+    │        ├──→ Fase 2B (Catálogos) ✅
     │        │
     │        ├──→ Fase 3 (Modificadores)
     │        │        │

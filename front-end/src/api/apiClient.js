@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://localhost:3000/api';
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -134,6 +134,76 @@ export const api = {
 
     async deleteUser(id) {
         const response = await fetchWithAuth(`/users/${id}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    },
+
+    // ========================
+    // CATALOGS
+    // ========================
+
+    async getCatalogGroups() {
+        const response = await fetchWithAuth('/catalogs/groups');
+        return response.json();
+    },
+
+    async getCatalogGroup(id) {
+        const response = await fetchWithAuth(`/catalogs/groups/${id}`);
+        return response.json();
+    },
+
+    async createCatalogGroup(data) {
+        const response = await fetchWithAuth('/catalogs/groups', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async updateCatalogGroup(id, data) {
+        const response = await fetchWithAuth(`/catalogs/groups/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async deleteCatalogGroup(id) {
+        const response = await fetchWithAuth(`/catalogs/groups/${id}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    },
+
+    async getCatalogItems(slug) {
+        const response = await fetchWithAuth(`/catalogs/groups/${slug}/items`);
+        return response.json();
+    },
+
+    async getCatalogItem(id) {
+        const response = await fetchWithAuth(`/catalogs/items/${id}`);
+        return response.json();
+    },
+
+    async createCatalogItem(data) {
+        const response = await fetchWithAuth('/catalogs/items', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async updateCatalogItem(id, data) {
+        const response = await fetchWithAuth(`/catalogs/items/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async deleteCatalogItem(id) {
+        const response = await fetchWithAuth(`/catalogs/items/${id}`, {
             method: 'DELETE'
         });
         return response.json();

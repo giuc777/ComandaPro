@@ -7,8 +7,10 @@ import { TokenService } from './services/tokenService.js';
 import { AuthService } from './services/authService.js';
 import { createAuthController } from './controllers/authController.js';
 import { createUserController } from './controllers/userController.js';
+import { createCatalogController } from './controllers/catalogController.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createUserRouter } from './routes/users.js';
+import { createCatalogRouter } from './routes/catalogs.js';
 
 const app = express();
 const PORT = config.port;
@@ -29,6 +31,7 @@ const tokenService = new TokenService(config.pool);
 const authService = new AuthService(config.pool, tokenService);
 const authController = createAuthController(authService);
 const userController = createUserController(config.pool, tokenService);
+const catalogController = createCatalogController(config.pool);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -36,6 +39,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', createAuthRouter(authController, tokenService));
 app.use('/api/users', createUserRouter(userController, tokenService));
+app.use('/api/catalogs', createCatalogRouter(catalogController, tokenService));
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

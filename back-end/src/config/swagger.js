@@ -80,6 +80,60 @@ const options = {
                         email: { type: 'string', example: 'nuevo@comandapro.com' },
                         role: { type: 'string', enum: ['Administrador', 'Barista', 'Cajero'], example: 'Barista' }
                     }
+                },
+                CatalogGroup: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Categorias de Producto' },
+                        slug: { type: 'string', example: 'categorias_producto' },
+                        description: { type: 'string', example: 'Clasificacion de productos del menu' },
+                        sort_order: { type: 'integer', example: 1 },
+                        active: { type: 'boolean', example: true },
+                        item_count: { type: 'integer', example: 5 },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                CatalogItem: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        group_id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Bebidas Calientes' },
+                        description: { type: 'string', example: 'Cafes y bebidas calientes' },
+                        icon: { type: 'string', example: 'local_cafe' },
+                        color: { type: 'string', example: '#543310' },
+                        parent_id: { type: 'integer', nullable: true, example: null },
+                        sort_order: { type: 'integer', example: 1 },
+                        active: { type: 'boolean', example: true },
+                        parent_name: { type: 'string', nullable: true },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                CreateCatalogGroupRequest: {
+                    type: 'object',
+                    required: ['name', 'slug'],
+                    properties: {
+                        name: { type: 'string', example: 'Categorias de Producto' },
+                        slug: { type: 'string', example: 'categorias_producto' },
+                        description: { type: 'string', example: 'Clasificacion de productos del menu' },
+                        sort_order: { type: 'integer', example: 1 }
+                    }
+                },
+                CreateCatalogItemRequest: {
+                    type: 'object',
+                    required: ['group_id', 'name'],
+                    properties: {
+                        group_id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Bebidas Calientes' },
+                        description: { type: 'string', example: 'Cafes y bebidas calientes' },
+                        icon: { type: 'string', example: 'local_cafe' },
+                        color: { type: 'string', example: '#543310' },
+                        parent_id: { type: 'integer', example: null },
+                        sort_order: { type: 'integer', example: 1 }
+                    }
                 }
             }
         }
