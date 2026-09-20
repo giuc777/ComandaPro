@@ -207,5 +207,64 @@ export const api = {
             method: 'DELETE'
         });
         return response.json();
+    },
+
+    // ========================
+    // PRODUCTS
+    // ========================
+
+    getUploadUrl(filename) {
+        return `http://localhost:3000/uploads/products/${filename}`;
+    },
+
+    async getProducts(categoryId) {
+        const url = categoryId ? `/products?category=${categoryId}` : '/products';
+        const response = await fetchWithAuth(url);
+        return response.json();
+    },
+
+    async getProduct(id) {
+        const response = await fetchWithAuth(`/products/${id}`);
+        return response.json();
+    },
+
+    async createProduct(formData) {
+        const accessToken = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE}/products`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: formData
+        });
+        return response.json();
+    },
+
+    async updateProduct(id, formData) {
+        const accessToken = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE}/products/${id}`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: formData
+        });
+        return response.json();
+    },
+
+    async deleteProduct(id) {
+        const response = await fetchWithAuth(`/products/${id}`, {
+            method: 'DELETE'
+        });
+        return response.json();
+    },
+
+    // ========================
+    // CATEGORIES (from catalogs)
+    // ========================
+
+    async getCategories() {
+        const response = await fetchWithAuth('/catalogs/groups');
+        const groups = await response.json();
+        const catGroup = groups.find(g => g.slug === 'categorias_producto');
+        if (!catGroup) return [];
+        const itemsResponse = await fetchWithAuth(`/catalogs/groups/${catGroup.slug}/items`);
+        return itemsResponse.json();
     }
 };

@@ -4,6 +4,7 @@ export default function MobileNav() {
   const items = [
     { to: '/dashboard', icon: 'dashboard', label: 'Inicio' },
     { to: '/pos', icon: 'point_of_sale', label: 'Ventas' },
+    { to: '/productos', icon: 'local_cafe', label: 'Productos' },
     { to: '/kds', icon: 'coffee_maker', label: 'Cocina' },
     { to: '/caja', icon: 'savings', label: 'Caja' },
     { to: '/ajustes', icon: 'settings', label: 'Ajustes' },

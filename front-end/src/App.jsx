@@ -11,6 +11,7 @@ import ProveedoresPage from './pages/ProveedoresPage';
 import ReportesPage from './pages/ReportesPage';
 import CatalogosPage from './pages/CatalogosPage';
 import CatalogoDetallePage from './pages/CatalogoDetallePage';
+import ProductosPage from './pages/ProductosPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -108,6 +109,14 @@ function App() {
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
                                 <CatalogoDetallePage />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/productos"
+                        element={
+                            <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+                                <ProductosPage />
                             </ProtectedRoute>
                         }
                     />

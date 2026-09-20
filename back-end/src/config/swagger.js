@@ -134,6 +134,37 @@ const options = {
                         parent_id: { type: 'integer', example: null },
                         sort_order: { type: 'integer', example: 1 }
                     }
+                },
+                Product: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        name: { type: 'string', example: 'Latte Vainilla' },
+                        category_id: { type: 'integer', nullable: true, example: 1 },
+                        category_name: { type: 'string', nullable: true, example: 'Bebidas Calientes' },
+                        price: { type: 'number', format: 'float', example: 28.00 },
+                        cost: { type: 'number', format: 'float', example: 8.50 },
+                        description: { type: 'string', example: 'Suave y aromatico' },
+                        badge: { type: 'string', nullable: true, example: 'Popular' },
+                        image: { type: 'string', nullable: true, example: 'abc-123.jpg' },
+                        sort_order: { type: 'integer', example: 1 },
+                        active: { type: 'boolean', example: true },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                CreateProductRequest: {
+                    type: 'object',
+                    required: ['name', 'price'],
+                    properties: {
+                        name: { type: 'string', example: 'Latte Vainilla' },
+                        category_id: { type: 'integer', example: 1 },
+                        price: { type: 'number', format: 'float', example: 28.00 },
+                        cost: { type: 'number', format: 'float', example: 8.50 },
+                        description: { type: 'string', example: 'Suave y aromatico' },
+                        badge: { type: 'string', example: 'Popular' },
+                        sort_order: { type: 'integer', example: 1 }
+                    }
                 }
             }
         }
