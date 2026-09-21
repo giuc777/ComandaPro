@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 
 export default function CashPaymentForm({ total, onAmountGivenChange }) {
-    const [amountGiven, setAmountGiven] = useState('');
+    const [amountGiven, setAmountGiven] = useState(total || 0);
     const change = Math.max(0, (Number(amountGiven) || 0) - total);
+
+    useEffect(() => {
+        setAmountGiven(total || 0);
+    }, [total]);
 
     useEffect(() => {
         onAmountGivenChange(Number(amountGiven) || 0);
