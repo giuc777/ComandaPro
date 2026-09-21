@@ -217,11 +217,11 @@ export default function CajaPage() {
                                     <hr className="border-outline-variant/20 my-3" />
                                     <div className="flex justify-between text-sm">
                                         <span className="text-on-surface-variant">Subtotal</span>
-                                        <span>Q{order.subtotal?.toFixed(2)}</span>
+                                        <span>Q{Number(order.subtotal || 0).toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-on-surface-variant">IVA 12%</span>
-                                        <span>Q{order.tax?.toFixed(2)}</span>
+                                        <span>Q{Number(order.tax || 0).toFixed(2)}</span>
                                     </div>
                                 </div>
 

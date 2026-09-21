@@ -8,7 +8,8 @@ const pool = mariadb.createPool({
     user: process.env.DB_USER || 'comandapro_user',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'comandapro',
-    connectionLimit: 5
+    connectionLimit: 5,
+    decimalAsNumber: true
 });
 
 export const config = {

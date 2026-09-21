@@ -84,15 +84,15 @@ export default function ReceiptModal({ payment, order, onClose }) {
 
                     <div className="flex justify-between text-sm">
                         <span className="text-on-surface-variant">Subtotal:</span>
-                        <span className="text-on-surface">Q{order.subtotal?.toFixed(2)}</span>
+                        <span className="text-on-surface">Q{Number(order.subtotal || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                         <span className="text-on-surface-variant">IVA 12%:</span>
-                        <span className="text-on-surface">Q{order.tax?.toFixed(2)}</span>
+                        <span className="text-on-surface">Q{Number(order.tax || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-base font-bold">
                         <span className="text-on-surface">Total:</span>
-                        <span className="text-primary">Q{order.total?.toFixed(2)}</span>
+                        <span className="text-primary">Q{Number(order.total || 0).toFixed(2)}</span>
                     </div>
 
                     <hr className="border-outline-variant/20" />
@@ -101,13 +101,13 @@ export default function ReceiptModal({ payment, order, onClose }) {
                         <span className="text-on-surface-variant">Pago:</span>
                         <span className="text-on-surface">
                             {methodLabel[payment.method] || payment.method}
-                            {payment.amount_given ? ` Q${payment.amount_given.toFixed(2)}` : ''}
+                            {payment.amount_given ? ` Q${Number(payment.amount_given).toFixed(2)}` : ''}
                         </span>
                     </div>
-                    {payment.change_amount > 0 && (
+                    {Number(payment.change_amount) > 0 && (
                         <div className="flex justify-between text-sm">
                             <span className="text-on-surface-variant">Cambio:</span>
-                            <span className="font-semibold text-tertiary">Q{payment.change_amount.toFixed(2)}</span>
+                            <span className="font-semibold text-tertiary">Q{Number(payment.change_amount).toFixed(2)}</span>
                         </div>
                     )}
                 </div>
