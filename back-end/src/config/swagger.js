@@ -308,7 +308,8 @@ const options = {
                         order_id: { type: 'integer', example: 1049 },
                         method: { type: 'string', enum: ['efectivo','tarjeta','qr'], example: 'efectivo' },
                         amount_given: { type: 'number', format: 'float', nullable: true, example: 40.00, description: 'Monto recibido (solo efectivo)' },
-                        sat_invoice: { type: 'string', nullable: true, example: 'FAC-00123', description: 'Numero de factura SAT (opcional)' }
+                        sat_invoice: { type: 'string', nullable: true, example: 'FAC-00123', description: 'Numero de factura SAT (opcional)' },
+                        apply_tax: { type: 'boolean', example: true, description: 'Aplicar IVA 12% (default true). Si es false se cobra solo el subtotal' }
                     }
                 },
                 DailySalesSummary: {

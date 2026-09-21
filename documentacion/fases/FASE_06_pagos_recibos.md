@@ -253,6 +253,7 @@ test('flujo de cobro completo', async ({ page }) => {
 - [x] Recibo muestra detalles completos
 - [ ] Opcional: facturación SAT con número
 - [x] Resumen del día se actualiza por método
+- [x] **IVA 12% opcional** al cobrar (check en pantalla de pago)
 
 ---
 
@@ -264,13 +265,22 @@ de la orden, selector de metodo, formulario de efectivo (con presets y calculo e
 vivo) y boton de cobrar. Sin `?order=` muestra la pantalla de caja/turnos
 (placeholder FASE_10).
 
+### IVA opcional
+En la pantalla de cobro hay un check **"Aplicar IVA 12%"** (activo por defecto).
+- Marcado: se cobra el total (subtotal + IVA).
+- Desmarcado: se cobra solo el subtotal; la orden se guarda con `tax = 0` y
+  `total = subtotal`, y el recibo muestra "IVA: No aplicado".
+
+El flag viaja como `apply_tax` en `POST /api/payments` y `sp_record_payment` lo
+recibe como parametro (`p_apply_tax`). Si se omite, el default es `true`.
+
 ### Flujo de cobro
 1. El POS (ParkedOrdersPanel) navega a `/caja?order=<id>` al presionar "Cobrar"
 2. CajaPage carga la orden con items via `GET /api/orders/:id`
-3. Selecciona metodo de pago
+3. Selecciona metodo de pago y (opcional) desmarca "Aplicar IVA 12%"
 4. Si efectivo: formulario con monto recibido + calculo de cambio + presets (Q25, Q50, Q100)
 5. Boton "Cobrar Q XX.00" llama `POST /api/payments`
-6. Backend: `sp_record_payment` valida status=pausada, calcula cambio, inserta pago, cambia orden a pagada, libera mesa
+6. Backend: `sp_record_payment` valida status=pausada, aplica/omite IVA, calcula cambio, inserta pago, cambia orden a pagada, libera mesa
 7. Frontend muestra modal de recibo y redirige a `/pos`
 
 ### Vinculacion mesa-orden

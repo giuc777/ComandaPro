@@ -8,8 +8,9 @@ export function createPaymentController(pool) {
     return {
 
         async recordPayment(req, res) {
-            const { order_id, method, amount_given, sat_invoice } = req.body;
+            const { order_id, method, amount_given, sat_invoice, apply_tax } = req.body;
             const cashier_id = req.user?.id || null;
+            const applyTax = apply_tax === undefined ? true : Boolean(apply_tax);
 
             if (!order_id || !method) {
                 return res.status(400).json({ error: 'order_id y method son requeridos' });
@@ -21,13 +22,15 @@ export function createPaymentController(pool) {
 
             try {
                 const [result] = await pool.query(
-                    'CALL sp_record_payment(?, ?, ?, ?, ?)',
-                    [Number(order_id), method, amount_given || null, cashier_id, sat_invoice || null]
+                    'CALL sp_record_payment(?, ?, ?, ?, ?, ?)',
+                    [Number(order_id), method, amount_given || null, cashier_id, sat_invoice || null, applyTax]
                 );
                 const row = result[0];
                 res.status(201).json({
                     payment_id: Number(row.payment_id),
                     change_amount: Number(row.change_amount),
+                    amount: Number(row.amount),
+                    apply_tax: applyTax,
                     message: 'Pago registrado'
                 });
             } catch (error) {

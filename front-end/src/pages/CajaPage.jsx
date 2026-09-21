@@ -15,6 +15,7 @@ export default function CajaPage() {
     const [error, setError] = useState(null);
     const [method, setMethod] = useState('efectivo');
     const [amountGiven, setAmountGiven] = useState(0);
+    const [applyTax, setApplyTax] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [receipt, setReceipt] = useState(null);
 
@@ -31,9 +32,12 @@ export default function CajaPage() {
             .finally(() => setLoading(false));
     }, [orderId]);
 
-    const change = Math.max(0, amountGiven - (Number(order?.total) || 0));
+    const amountDue = applyTax
+        ? Number(order?.total || 0)
+        : Number(order?.subtotal || 0);
+    const change = Math.max(0, amountGiven - amountDue);
     const canPay = order && order.status === 'pausada' && !processing &&
-        (method !== 'efectivo' || amountGiven >= Number(order?.total));
+        (method !== 'efectivo' || amountGiven >= amountDue);
 
     const handlePay = useCallback(async () => {
         if (!canPay) return;
@@ -43,18 +47,27 @@ export default function CajaPage() {
                 order_id: Number(orderId),
                 method,
                 amount_given: method === 'efectivo' ? amountGiven : null,
-                sat_invoice: null
+                sat_invoice: null,
+                apply_tax: applyTax
             });
             if (result.error) throw new Error(result.error);
 
             const paymentData = await api.getPaymentById(result.payment_id);
-            setReceipt({ payment: paymentData, order });
+            setReceipt({
+                payment: paymentData,
+                order: {
+                    ...order,
+                    subtotal: paymentData.subtotal,
+                    tax: paymentData.tax,
+                    total: paymentData.total
+                }
+            });
         } catch (err) {
             setError(err.message);
         } finally {
             setProcessing(false);
         }
-    }, [canPay, orderId, method, amountGiven, order]);
+    }, [canPay, orderId, method, amountGiven, order, applyTax]);
 
     const handleReceiptClose = () => {
         setReceipt(null);
@@ -193,7 +206,7 @@ export default function CajaPage() {
                                 <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4">
                                     <div className="flex justify-between items-center mb-3">
                                         <span className="font-display text-lg text-on-surface font-bold">
-                                            Q {Number(order.total).toFixed(2)}
+                                            Q {amountDue.toFixed(2)}
                                         </span>
                                         <span className="px-2.5 py-1 rounded-full text-[0.6875rem] font-bold bg-tertiary-container/30 text-tertiary">
                                             {order.table_name || 'Para llevar'}
@@ -221,8 +234,21 @@ export default function CajaPage() {
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-on-surface-variant">IVA 12%</span>
-                                        <span>Q{Number(order.tax || 0).toFixed(2)}</span>
+                                        <span className={applyTax ? '' : 'line-through text-on-surface-variant'}>
+                                            Q{Number(order.tax || 0).toFixed(2)}
+                                        </span>
                                     </div>
+
+                                    <label className="flex items-center gap-2 mt-3 pt-3 border-t border-outline-variant/20 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={applyTax}
+                                            onChange={e => setApplyTax(e.target.checked)}
+                                            className="w-4 h-4 accent-primary"
+                                            data-testid="apply-tax"
+                                        />
+                                        <span className="text-sm font-semibold text-on-surface">Aplicar IVA 12%</span>
+                                    </label>
                                 </div>
 
                                 {/* Metodo de pago */}
@@ -232,7 +258,7 @@ export default function CajaPage() {
                                 {method === 'efectivo' && (
                                     <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4">
                                         <CashPaymentForm
-                                            total={Number(order.total)}
+                                            total={amountDue}
                                             onAmountGivenChange={setAmountGiven}
                                         />
                                     </div>
@@ -256,7 +282,7 @@ export default function CajaPage() {
                                     }`}
                                 >
                                     <span className="material-symbols-outlined text-[20px]">savings</span>
-                                    Cobrar Q {Number(order.total).toFixed(2)}
+                                    Cobrar Q {amountDue.toFixed(2)}
                                 </button>
                             </>
                         )}

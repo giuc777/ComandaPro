@@ -88,7 +88,9 @@ export default function ReceiptModal({ payment, order, onClose }) {
                     </div>
                     <div className="flex justify-between text-sm">
                         <span className="text-on-surface-variant">IVA 12%:</span>
-                        <span className="text-on-surface">Q{Number(order.tax || 0).toFixed(2)}</span>
+                        <span className={Number(order.tax || 0) > 0 ? 'text-on-surface' : 'text-on-surface-variant'}>
+                            {Number(order.tax || 0) > 0 ? `Q${Number(order.tax).toFixed(2)}` : 'No aplicado'}
+                        </span>
                     </div>
                     <div className="flex justify-between text-base font-bold">
                         <span className="text-on-surface">Total:</span>
