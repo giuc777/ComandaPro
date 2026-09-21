@@ -10,7 +10,7 @@
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ✅ Completada | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ✅ Completada | FASE 02, 03 |
 | [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | 🚧 Próximamente (fuera de alcance) | FASE 04 |
-| [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ⬜ Pendiente | FASE 04 |
+| [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ✅ Completada | FASE 04 |
 | [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ⬜ Pendiente | FASE 02, **04, 06** |
 | [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ⬜ Pendiente | FASE 07 |
 | [FASE 09](fases/FASE_09_mesas.md) | Mesas | ⬜ Pendiente | FASE 04 |
@@ -33,7 +33,7 @@ Fase 1 (Auth)
              └──→ Fase 4 (Órdenes POS) ✅
                       │
                       ├──→ Fase 5 (KDS) 🚧 Próximamente
-                      ├──→ Fase 6 (Pagos)
+                      ├──→ Fase 6 (Pagos) ✅
                       │        │
                       │        ├──→ Fase 7 (Inventario + Recetas)
                       │        │        │

@@ -344,5 +344,34 @@ export const api = {
             method: 'DELETE'
         });
         return response.json();
+    },
+
+    // ========================
+    // PAYMENTS
+    // ========================
+
+    async recordPayment(data) {
+        const response = await fetchWithAuth('/payments', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
+    async getPaymentById(id) {
+        const response = await fetchWithAuth(`/payments/${id}`);
+        return response.json();
+    },
+
+    async getDailyPayments(date) {
+        const url = date ? `/payments/daily?date=${date}` : '/payments/daily';
+        const response = await fetchWithAuth(url);
+        return response.json();
+    },
+
+    async getDailySalesSummary(date) {
+        const url = date ? `/payments/daily/summary?date=${date}` : '/payments/daily/summary';
+        const response = await fetchWithAuth(url);
+        return response.json();
     }
 };

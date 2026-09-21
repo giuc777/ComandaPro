@@ -243,13 +243,47 @@ test('flujo de cobro completo', async ({ page }) => {
 
 ## 6. Criterios de Aceptación
 
-- [ ] Selección de método de pago: **efectivo, tarjeta, qr**
-- [ ] Cálculo de cambio solo para efectivo
-- [ ] Tarjeta y QR solo **registran** el método (sin procesar pago)
-- [ ] Solo se pueden cobrar órdenes en estado `pausada`
-- [ ] Pago registra en tabla `payments` con `cashier_id`
-- [ ] Orden cambia status a `pagada`
-- [ ] Mesa se libera (status = dirty)
-- [ ] Recibo muestra detalles completos
+- [x] Selección de método de pago: **efectivo, tarjeta, qr**
+- [x] Cálculo de cambio solo para efectivo
+- [x] Tarjeta y QR solo **registran** el método (sin procesar pago)
+- [x] Solo se pueden cobrar órdenes en estado `pausada`
+- [x] Pago registra en tabla `payments` con `cashier_id`
+- [x] Orden cambia status a `pagada`
+- [x] Mesa se libera (status = dirty)
+- [x] Recibo muestra detalles completos
 - [ ] Opcional: facturación SAT con número
-- [ ] Resumen del día se actualiza por método
+- [x] Resumen del día se actualiza por método
+
+---
+
+## 7. Notas de Implementación
+
+### Pantalla de cobro
+`CajaPage` detecta `?order=<id>` y muestra el formulario de cobro con el resumen
+de la orden, selector de metodo, formulario de efectivo (con presets y calculo en
+vivo) y boton de cobrar. Sin `?order=` muestra la pantalla de caja/turnos
+(placeholder FASE_10).
+
+### Flujo de cobro
+1. El POS (ParkedOrdersPanel) navega a `/caja?order=<id>` al presionar "Cobrar"
+2. CajaPage carga la orden con items via `GET /api/orders/:id`
+3. Selecciona metodo de pago
+4. Si efectivo: formulario con monto recibido + calculo de cambio + presets (Q25, Q50, Q100)
+5. Boton "Cobrar Q XX.00" llama `POST /api/payments`
+6. Backend: `sp_record_payment` valida status=pausada, calcula cambio, inserta pago, cambia orden a pagada, libera mesa
+7. Frontend muestra modal de recibo y redirige a `/pos`
+
+### Vinculacion mesa-orden
+`sp_create_parked_order` ahora vincula la mesa (`tables.status='occupied'`,
+`tables.current_order_id`) cuando se crea una orden con mesa. `sp_record_payment`
+la libera (`tables.status='dirty'`, `current_order_id=NULL`).
+
+### Archivos
+- `database/migrations/007_fase6_payments.sql`
+- `database/procedures/007_payment_procedures.sql`
+- `back-end/src/controllers/paymentController.js`
+- `back-end/src/routes/payments.js`
+- `front-end/src/pages/CajaPage.jsx`
+- `front-end/src/components/PaymentMethodSelector.jsx`
+- `front-end/src/components/CashPaymentForm.jsx`
+- `front-end/src/components/ReceiptModal.jsx`

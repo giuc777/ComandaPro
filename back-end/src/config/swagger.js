@@ -278,6 +278,52 @@ const options = {
                 },
 
                 // ========================
+                // PAYMENTS (FASE 06)
+                // ========================
+
+                Payment: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        order_id: { type: 'integer', example: 1049 },
+                        customer_name: { type: 'string', nullable: true, example: 'Ana G.' },
+                        table_id: { type: 'integer', nullable: true, example: 4 },
+                        table_name: { type: 'string', nullable: true, example: 'Terraza A' },
+                        subtotal: { type: 'number', format: 'float', example: 32.14 },
+                        tax: { type: 'number', format: 'float', example: 3.86 },
+                        total: { type: 'number', format: 'float', example: 36.00 },
+                        method: { type: 'string', enum: ['efectivo','tarjeta','qr'], example: 'efectivo' },
+                        amount: { type: 'number', format: 'float', example: 36.00 },
+                        amount_given: { type: 'number', format: 'float', nullable: true, example: 40.00 },
+                        change_amount: { type: 'number', format: 'float', example: 4.00 },
+                        cashier_name: { type: 'string', nullable: true, example: 'Ana Lopez' },
+                        sat_invoice: { type: 'string', nullable: true },
+                        created_at: { type: 'string', format: 'date-time' }
+                    }
+                },
+                CreatePaymentRequest: {
+                    type: 'object',
+                    required: ['order_id', 'method'],
+                    properties: {
+                        order_id: { type: 'integer', example: 1049 },
+                        method: { type: 'string', enum: ['efectivo','tarjeta','qr'], example: 'efectivo' },
+                        amount_given: { type: 'number', format: 'float', nullable: true, example: 40.00, description: 'Monto recibido (solo efectivo)' },
+                        sat_invoice: { type: 'string', nullable: true, example: 'FAC-00123', description: 'Numero de factura SAT (opcional)' }
+                    }
+                },
+                DailySalesSummary: {
+                    type: 'object',
+                    properties: {
+                        date: { type: 'string', example: '2026-09-20' },
+                        total_sales: { type: 'number', format: 'float', example: 1250.00 },
+                        cash_sales: { type: 'number', format: 'float', example: 800.00 },
+                        card_sales: { type: 'number', format: 'float', example: 350.00 },
+                        qr_sales: { type: 'number', format: 'float', example: 100.00 },
+                        transaction_count: { type: 'integer', example: 25 }
+                    }
+                },
+
+                // ========================
                 // ERROR
                 // ========================
                 Error: {

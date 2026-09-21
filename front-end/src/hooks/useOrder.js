@@ -17,15 +17,15 @@ const emptyOrder = {
 export function useOrder() {
     const [order, setOrder] = useState(emptyOrder);
 
-    const addItem = useCallback((product, modifiers = [], modifierLabels = '', quantity = 1) => {
-        const unitPrice = product.finalPrice !== undefined ? product.finalPrice : Number(product.price);
+    const addItem = useCallback((product, modifiers = [], modifierLabels = '', unitPrice) => {
+        const price = unitPrice !== undefined && unitPrice !== null ? Number(unitPrice) : Number(product.price);
         const item = {
             tempId: Date.now() + Math.random(),
             product_id: product.id,
             product_name: product.name,
             product_image: product.image,
-            quantity,
-            unit_price: unitPrice,
+            quantity: 1,
+            unit_price: price,
             modifiers,
             modifier_labels: modifierLabels,
             notes: ''

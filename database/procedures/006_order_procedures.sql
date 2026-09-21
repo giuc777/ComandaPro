@@ -31,9 +31,20 @@ CREATE PROCEDURE sp_create_parked_order(
     IN p_created_by INT
 )
 BEGIN
+    DECLARE v_order_id INT;
+
     INSERT INTO orders (table_id, customer_name, mode, notes, created_by, status, parked_at)
     VALUES (p_table_id, p_customer_name, p_mode, p_notes, p_created_by, 'pausada', CURRENT_TIMESTAMP);
-    SELECT LAST_INSERT_ID() AS order_id;
+
+    SET v_order_id = LAST_INSERT_ID();
+
+    -- Vincular mesa si se asigno
+    IF p_table_id IS NOT NULL THEN
+        UPDATE tables SET status = 'occupied', current_order_id = v_order_id
+        WHERE id = p_table_id;
+    END IF;
+
+    SELECT v_order_id AS order_id;
 END //
 DELIMITER ;
 
