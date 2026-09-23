@@ -3,7 +3,7 @@
 -- Procedimientos de SOLO LECTURA (unicamente consultan datos)
 -- Total: 47 procedimientos
 -- ============================================
-USE `comandapro`;
+USE `DeerCoffeeDB`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 

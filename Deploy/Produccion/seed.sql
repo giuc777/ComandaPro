@@ -7,7 +7,7 @@
 --   mateo  / barista123   -> Barista
 --   carlos / barista123   -> Cajero
 -- ============================================
-USE `comandapro`;
+USE `DeerCoffeeDB`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 

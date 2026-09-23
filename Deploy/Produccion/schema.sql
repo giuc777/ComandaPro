@@ -4,8 +4,8 @@
 -- Ejecutar con: mysql -u <usuario> -p < schema.sql
 -- ============================================
 
-CREATE DATABASE IF NOT EXISTS `comandapro` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `comandapro`;
+CREATE DATABASE IF NOT EXISTS `DeerCoffeeDB` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `DeerCoffeeDB`;
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;

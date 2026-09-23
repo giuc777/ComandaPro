@@ -28,7 +28,7 @@ Raspberry Pi que actuara como servidor (backend + base de datos + frontend).
         |    - Swagger /api-docs        |
         |                               |
         |  MariaDB 11.4 (:3306)         |
-        |    - base de datos comandapro |
+        |    - base de datos DeerCoffeeDB |
         +-------------------------------+
                      |
                      |  TCP 9100  o  USB
@@ -38,7 +38,8 @@ Raspberry Pi que actuara como servidor (backend + base de datos + frontend).
 
 - **Backend:** Node.js 22 + Express 5 (puerto configurable con `PORT`).
 - **Frontend:** Vite + React 19, compilado a estaticos (`dist/`).
-- **Base de datos:** MariaDB 11.4, base `comandapro`.
+- **Base de datos:** MariaDB 11.4. En **produccion** la base se llama
+  `DeerCoffeeDB`; el paquete `Test/` usa `comandapro`.
 - **Impresion:** ver [`../documentacion/print.md`](../documentacion/print.md).
 
 ---
@@ -133,8 +134,8 @@ Ejecuta (cambia la contrasena por una fuerte; **no** la subas a git):
 
 ```sql
 CREATE USER 'comandapro_user'@'localhost' IDENTIFIED BY 'CAMBIA_ESTA_PASSWORD';
-CREATE DATABASE IF NOT EXISTS `comandapro` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-GRANT ALL PRIVILEGES ON `comandapro`.* TO 'comandapro_user'@'localhost';
+CREATE DATABASE IF NOT EXISTS `DeerCoffeeDB` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON `DeerCoffeeDB`.* TO 'comandapro_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
@@ -151,19 +152,33 @@ El paquete de instalacion esta en esta misma carpeta:
 ```
 Deploy/
   Produccion/     <- datos iniciales SIN transacciones (recomendado para produccion)
-    schema.sql
+    schema.sql            (crea y usa la base `DeerCoffeeDB`)
     sp_lectura.sql
     sp_simple.sql
     sp_transaccionales.sql
     seed.sql
   Test/           <- datos DEMO (ordenes, pagos, turnos, compras) para pruebas
-    ...
+    ...                   (usa la base `comandapro`)
 ```
 
 **Orden obligatorio de ejecucion:**
 
+Produccion (base `DeerCoffeeDB`):
+
 ```bash
-cd Deploy/Produccion        # o Deploy/Test
+cd Deploy/Produccion
+
+mysql -u comandapro_user -p DeerCoffeeDB < schema.sql
+mysql -u comandapro_user -p DeerCoffeeDB < sp_lectura.sql
+mysql -u comandapro_user -p DeerCoffeeDB < sp_simple.sql
+mysql -u comandapro_user -p DeerCoffeeDB < sp_transaccionales.sql
+mysql -u comandapro_user -p DeerCoffeeDB < seed.sql
+```
+
+Test (base `comandapro`):
+
+```bash
+cd Deploy/Test
 
 mysql -u comandapro_user -p comandapro < schema.sql
 mysql -u comandapro_user -p comandapro < sp_lectura.sql
@@ -172,11 +187,11 @@ mysql -u comandapro_user -p comandapro < sp_transaccionales.sql
 mysql -u comandapro_user -p comandapro < seed.sql
 ```
 
-Verifica:
+Verifica (produccion):
 
 ```bash
-mysql -u comandapro_user -p comandapro -e "SHOW TABLES;"
-mysql -u comandapro_user -p comandapro -e "SELECT COUNT(*) FROM users;"
+mysql -u comandapro_user -p DeerCoffeeDB -e "SHOW TABLES;"
+mysql -u comandapro_user -p DeerCoffeeDB -e "SELECT COUNT(*) FROM users;"
 ```
 
 ### 6.1 Usuarios iniciales (seed)
@@ -212,7 +227,7 @@ PORT=3000
 DB_HOST=127.0.0.1
 DB_USER=comandapro_user
 DB_PASSWORD=CAMBIA_ESTA_PASSWORD
-DB_NAME=comandapro
+DB_NAME=DeerCoffeeDB
 
 JWT_SECRET=GENERA_UN_STRING_ALEATORIO_LARGO
 JWT_EXPIRES_IN=15m
@@ -446,7 +461,7 @@ cd ~/desarrollo
 git pull
 
 # Base de datos: solo si hubo cambios de esquema (usar el paquete actualizado)
-# mysql -u comandapro_user -p comandapro < Deploy/Produccion/schema.sql  # OJO: recrea tablas
+# mysql -u comandapro_user -p DeerCoffeeDB < Deploy/Produccion/schema.sql  # OJO: recrea tablas
 # Revisa siempre las migraciones nuevas en database/migrations/
 
 # Backend

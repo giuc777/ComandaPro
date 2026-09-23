@@ -5,7 +5,7 @@
 | Usuario | Contraseña | Permisos |
 |---------|------------|----------|
 | `root` | *(la del sistema)* | Superuser |
-| `comandapro_user` | *(ver `back-end/.env` → `DB_PASSWORD`)* | Full access a DB `comandapro` |
+| `comandapro_user` | *(ver `back-end/.env` → `DB_PASSWORD`)* | Full access a DB `comandapro` (dev) / `DeerCoffeeDB` (produccion) |
 
 ## Credenciales de la Aplicación
 
@@ -49,7 +49,10 @@ Verificar estado:
 
 ## Base de datos
 
-Nombre: `comandapro`
+Nombre: `comandapro` (desarrollo) / `DeerCoffeeDB` (produccion)
+
+> En produccion (Raspberry Pi) la base se llama `DeerCoffeeDB`. Ver la guia
+> de despliegue en [`../Deploy/README.md`](../Deploy/README.md).
 
 ### Migraciones ejecutadas
 
