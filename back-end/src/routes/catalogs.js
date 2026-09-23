@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, adminOnly } from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
 
 export function createCatalogRouter(catalogController, tokenService) {
     const router = Router();
@@ -20,19 +20,16 @@ export function createCatalogRouter(catalogController, tokenService) {
 
     router.post('/groups',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => catalogController.createGroup(req, res)
     );
 
     router.put('/groups/:id',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => catalogController.updateGroup(req, res)
     );
 
     router.delete('/groups/:id',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => catalogController.deleteGroup(req, res)
     );
 
@@ -52,19 +49,16 @@ export function createCatalogRouter(catalogController, tokenService) {
 
     router.post('/items',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => catalogController.createItem(req, res)
     );
 
     router.put('/items/:id',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => catalogController.updateItem(req, res)
     );
 
     router.delete('/items/:id',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => catalogController.deleteItem(req, res)
     );
 

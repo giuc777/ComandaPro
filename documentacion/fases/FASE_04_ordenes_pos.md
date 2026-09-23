@@ -353,7 +353,9 @@ La tabla `tables` se sembró con 8 mesas alineadas al catálogo `mesas`
 FASE 09 (Mesas) reconciliará el modelo completo.
 
 ### Botón Cobrar
-Por ahora navega a `/caja?order=<id>` (stub). FASE 06 implementará el cobro real.
+Navega a `/caja?order=<id>` donde se registra el pago (FASE 06). Se requiere
+un turno de caja abierto (FASE 10); sin turno, la pantalla de cobro muestra un
+aviso y bloquea el botón.
 
 ### Base de datos
 - Migración: `database/migrations/006_fase4_orders.sql`

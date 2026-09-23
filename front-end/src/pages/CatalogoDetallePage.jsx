@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/apiClient';
+import { useConfirm } from '../hooks/useConfirm';
 
 const MOCK_ITEMS = {
   categorias_producto: [
@@ -38,6 +39,16 @@ const MOCK_ITEMS = {
     { id: 24, group_id: 5, name: 'Vainilla', icon: 'local_florist', color: '#9c4221', sort_order: 5, parent_name: null },
     { id: 25, group_id: 5, name: 'Matcha', icon: 'eco', color: '#006b3f', sort_order: 6, parent_name: null },
   ],
+  mesas: [
+    { id: 38, group_id: 8, name: 'Mesa 1', icon: 'table_restaurant', color: '#006b3f', sort_order: 1, capacity: 4, table_status: 'free' },
+    { id: 39, group_id: 8, name: 'Mesa 2', icon: 'table_restaurant', color: '#006b3f', sort_order: 2, capacity: 4, table_status: 'free' },
+    { id: 40, group_id: 8, name: 'Mesa 3', icon: 'table_restaurant', color: '#006b3f', sort_order: 3, capacity: 4, table_status: 'dirty' },
+    { id: 41, group_id: 8, name: 'Terraza A', icon: 'deck', color: '#543310', sort_order: 4, capacity: 4, table_status: 'dirty' },
+    { id: 42, group_id: 8, name: 'Terraza B', icon: 'deck', color: '#543310', sort_order: 5, capacity: 4, table_status: 'dirty' },
+    { id: 43, group_id: 8, name: 'Barra Principal', icon: 'countertops', color: '#0061a4', sort_order: 6, capacity: 6, table_status: 'dirty' },
+    { id: 44, group_id: 8, name: 'Sala Privada', icon: 'meeting_room', color: '#9c4221', sort_order: 7, capacity: 8, table_status: 'dirty' },
+    { id: 45, group_id: 8, name: 'Area de Estudio', icon: 'desk', color: '#002b26', sort_order: 8, capacity: 4, table_status: 'free' },
+  ],
 };
 
 const MOCK_GROUPS = [
@@ -46,9 +57,10 @@ const MOCK_GROUPS = [
   { id: 3, name: 'Tamanos', slug: 'tamanos', description: 'Tamanos disponibles para bebidas y comidas', icon: 'straighten', color: '#006b3f', item_count: 4 },
   { id: 4, name: 'Metodos de Preparacion', slug: 'metodos_preparacion', description: 'Formas de preparar las bebidas', icon: 'science', color: '#9c4221', item_count: 5 },
   { id: 5, name: 'Ingredientes Principales', slug: 'ingredientes_principales', description: 'Base de ingredientes para recetas', icon: 'eco', color: '#002b26', item_count: 6 },
+  { id: 8, name: 'Mesas', slug: 'mesas', description: 'Mesas y espacios del salon', icon: 'table_restaurant', color: '#006b3f', item_count: 8 },
 ];
 
-const EMPTY_ITEM = { name: '', description: '', icon: 'label', color: '', sort_order: 0, price_adjustment: 0 };
+const EMPTY_ITEM = { name: '', description: '', icon: 'label', color: '', sort_order: 0, price_adjustment: 0, capacity: 4 };
 
 export default function CatalogoDetallePage() {
   const { slug } = useParams();
@@ -64,6 +76,7 @@ export default function CatalogoDetallePage() {
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [allProducts, setAllProducts] = useState([]);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const { confirm, confirmModal } = useConfirm();
 
   useEffect(() => {
     loadData();
@@ -118,6 +131,7 @@ export default function CatalogoDetallePage() {
       color: item.color || '',
       sort_order: item.sort_order || 0,
       price_adjustment: item.price_adjustment || 0,
+      capacity: item.capacity || 4,
     });
     setModalOpen(true);
   }
@@ -163,7 +177,14 @@ export default function CatalogoDetallePage() {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Desactivar este item?')) return;
+    const ok = await confirm({
+      title: 'Desactivar item',
+      message: '¿Desactivar este item del catálogo?',
+      confirmLabel: 'Desactivar',
+      variant: 'danger',
+      icon: 'delete',
+    });
+    if (!ok) return;
 
     if (useApi) {
       try {
@@ -275,6 +296,8 @@ export default function CatalogoDetallePage() {
                   <th className="text-left px-4 py-2.5">Icono</th>
                   <th className="text-left px-4 py-2.5">Color</th>
                   <th className="text-left px-4 py-2.5">Orden</th>
+                  {group?.slug === 'mesas' && <th className="text-left px-4 py-2.5">Cap.</th>}
+                  {group?.slug === 'mesas' && <th className="text-left px-4 py-2.5">Estado</th>}
                   {group.is_modifier && <th className="text-right px-4 py-2.5">Ajuste</th>}
                   <th className="text-right px-4 py-2.5">Accion</th>
                 </tr>
@@ -300,6 +323,27 @@ export default function CatalogoDetallePage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-[0.8125rem] text-on-surface-variant">{item.sort_order}</td>
+                    {group?.slug === 'mesas' && (
+                      <td className="px-4 py-3 text-[0.8125rem] text-on-surface-variant">{item.capacity || 4}</td>
+                    )}
+                    {group?.slug === 'mesas' && (
+                      <td className="px-4 py-3">
+                        {item.table_status ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.625rem] font-bold ${
+                            item.table_status === 'free' ? 'bg-green-100 text-green-700' :
+                            item.table_status === 'occupied' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              item.table_status === 'free' ? 'bg-green-500' :
+                              item.table_status === 'occupied' ? 'bg-red-500' :
+                              'bg-yellow-500'
+                            }`}></span>
+                            {item.table_status === 'free' ? 'Libre' : item.table_status === 'occupied' ? 'Ocupada' : 'Sucia'}
+                          </span>
+                        ) : <span className="text-on-surface-variant">-</span>}
+                      </td>
+                    )}
                     {group.is_modifier && (
                       <td className="px-4 py-3 text-[0.8125rem] text-right font-semibold">
                         {item.price_adjustment > 0 ? `+$${Number(item.price_adjustment).toFixed(2)}` : item.price_adjustment < 0 ? `-$${Math.abs(Number(item.price_adjustment)).toFixed(2)}` : <span className="text-on-surface-variant">-</span>}
@@ -360,6 +404,13 @@ export default function CatalogoDetallePage() {
                 <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Orden</label>
                 <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="input-field" min="0" />
               </div>
+              {group?.slug === 'mesas' && (
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Capacidad</label>
+                  <input type="number" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: parseInt(e.target.value) || 4 }))} className="input-field" min="1" />
+                  <span className="text-[0.6875rem] text-on-surface-variant">Personas por mesa/espacio</span>
+                </div>
+              )}
               {group.is_modifier && (
                 <div>
                   <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Ajuste de precio</label>
@@ -419,6 +470,8 @@ export default function CatalogoDetallePage() {
           </div>
         </div>
       )}
+
+      {confirmModal}
     </div>
   );
 }

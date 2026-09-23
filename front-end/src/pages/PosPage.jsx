@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrder } from '../hooks/useOrder';
+import { useConfirm } from '../hooks/useConfirm';
 import { api } from '../api/apiClient';
 import OrderModeToggle from '../components/OrderModeToggle';
 import TableSelector from '../components/TableSelector';
@@ -12,6 +13,7 @@ import ParkedOrdersPanel from '../components/ParkedOrdersPanel';
 export default function PosPage() {
     const navigate = useNavigate();
     const { order, addItem, updateQuantity, removeItem, setTable, setCustomerName, setMode, setNotes, loadOrder, reset, computeTotals, hasItems, saveOrder } = useOrder();
+    const { confirm, confirmModal } = useConfirm();
 
     const [tables, setTables] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
@@ -80,7 +82,14 @@ export default function PosPage() {
     }
 
     async function handleAnular(parkedOrder) {
-        if (!confirm(`Anular orden #${parkedOrder.id}?`)) return;
+        const ok = await confirm({
+            title: 'Anular orden',
+            message: `¿Seguro que deseas anular la orden #${parkedOrder.id}? Esta acción no se puede deshacer.`,
+            confirmLabel: 'Anular orden',
+            variant: 'danger',
+            icon: 'block',
+        });
+        if (!ok) return;
         setActionBusy(true);
         try {
             const res = await api.voidOrder(parkedOrder.id);
@@ -198,6 +207,8 @@ export default function PosPage() {
                     <span>{showToast.message}</span>
                 </div>
             )}
+
+            {confirmModal}
         </div>
     );
 }

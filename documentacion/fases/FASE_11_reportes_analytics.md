@@ -1,5 +1,10 @@
 # Fase 11: Reportes y Analíticas
 
+> ## ✅ ESTADO: IMPLEMENTADA
+>
+> Módulo completo de reportes y dashboard con datos reales. Ver notas de
+> implementación al final por diferencias con el esquema original del documento.
+
 ## Objetivo
 Implementar el módulo de reportes con dashboards, análisis de ventas, y reportes de cierre de caja.
 
@@ -157,10 +162,62 @@ test('dashboard muestra KPIs del día', async ({ page }) => {
 
 ## 5. Criterios de Aceptación
 
-- [ ] Dashboard muestra ventas totales, por método, y transacciones
-- [ ] Gráfica de ventas por hora muestra tendencia
-- [ ] Ranking muestra top 10 productos más vendidos
-- [ ] Ventas por categoría muestra distribución
-- [ ] Reporte de cierre de caja muestra totales del turno
-- [ ] Comparativa de periodos muestra hoy vs ayer / semana vs semana
-- [ ] Solo admin puede acceder a reportes
+- [x] Dashboard muestra ventas totales, por método, y transacciones
+- [x] Gráfica de ventas por hora muestra tendencia
+- [x] Ranking muestra top 10 productos más vendidos
+- [x] Ventas por categoría muestra distribución
+- [x] Reporte de cierre de caja muestra totales del turno
+- [x] Comparativa de periodos muestra hoy vs ayer / semana vs semana
+- [x] Solo admin puede acceder a reportes
+
+---
+
+## 6. Implementación (notas reales)
+
+El esquema real difiere del borrador original de este documento. La
+implementación usa:
+
+| Borrador original | Implementación real |
+|-------------------|---------------------|
+| `payments.grand_total` | `payments.amount` |
+| Tabla `categories` | `catalog_items` (grupo `categorias_producto`, vía `products.category_id`) |
+| `order.status = 'paid'` | `order.status = 'pagada'` |
+| Vistas SQL | Procedimientos almacenados |
+
+### Stored Procedures (`database/procedures/011_report_procedures.sql`)
+
+- `sp_get_sales_summary_range(start, end)`
+- `sp_get_product_ranking(start, end, limit)`
+- `sp_get_hourly_sales(date)`
+- `sp_get_category_sales(start, end)`
+- `sp_get_sales_trend(start, end)`
+- `sp_get_period_comparison(date)`
+- `sp_get_dashboard_summary()`
+- `sp_get_cash_closing(shift_id)`
+
+### Endpoints (`back-end/src/routes/reports.js`)
+
+| Método | Ruta | Auth |
+|--------|------|------|
+| `GET` | `/api/reports/dashboard` | Autenticado |
+| `GET` | `/api/reports/daily` | Admin |
+| `GET` | `/api/reports/products/ranking` | Admin |
+| `GET` | `/api/reports/hourly` | Admin |
+| `GET` | `/api/reports/categories` | Admin |
+| `GET` | `/api/reports/trend` | Admin |
+| `GET` | `/api/reports/period` | Admin |
+| `GET` | `/api/reports/cash-closing` | Admin |
+
+> `/dashboard` es accesible a cualquier usuario autenticado (es la pantalla de
+> inicio); el resto de reportes son solo para `Administrador`.
+
+### Frontend
+
+- `pages/ReportesPage.jsx` — dashboard de reportes con tabs de rango
+  (Hoy / Ayer / Semana / Mes), KPIs, comparativa, tendencia, hora, categoría y ranking.
+- `pages/Dashboard.jsx` — reescrito con datos reales (`/reports/dashboard`).
+- `components/reports/` — `KpiCard`, `HourlyChart`, `CategoryChart`,
+  `ProductRankingTable`, `PeriodComparison`, `SalesTrendChart`.
+- `components/AdminRoute.jsx` — guard de ruta solo admin.
+- Gráficas con `recharts`.
+

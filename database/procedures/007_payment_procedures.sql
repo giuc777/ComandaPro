@@ -19,6 +19,16 @@ BEGIN
     DECLARE v_amount DECIMAL(10,2);
     DECLARE v_status VARCHAR(20);
     DECLARE v_change DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_shift_id INT DEFAULT NULL;
+    DECLARE v_payment_id INT DEFAULT NULL;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
 
     -- Validar estado de la orden
     SELECT subtotal, total, status INTO v_subtotal, v_total, v_status
@@ -32,6 +42,16 @@ BEGIN
     IF v_status <> 'pausada' THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Solo se pueden cobrar ordenes en estado pausada';
+    END IF;
+
+    -- Exigir un turno de caja abierto
+    SELECT id INTO v_shift_id
+    FROM shifts WHERE status = 'open'
+    ORDER BY start_time DESC LIMIT 1;
+
+    IF v_shift_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Debe abrir un turno de caja antes de cobrar';
     END IF;
 
     -- Monto a cobrar: con IVA (total) o sin IVA (subtotal)
@@ -50,6 +70,9 @@ BEGIN
     INSERT INTO payments (order_id, method, amount, amount_given, change_amount, cashier_id, sat_invoice)
     VALUES (p_order_id, p_method, v_amount, p_amount_given, v_change, p_cashier_id, p_sat_invoice);
 
+    -- Capturar el id del pago antes de insertar en otras tablas
+    SET v_payment_id = LAST_INSERT_ID();
+
     -- Actualizar orden a pagada (y ajustar IVA si no se aplico)
     IF p_apply_tax = FALSE THEN
         UPDATE orders SET status = 'pagada', tax = 0, total = subtotal WHERE id = p_order_id;
@@ -61,7 +84,17 @@ BEGIN
     UPDATE tables SET status = 'dirty', current_order_id = NULL
     WHERE current_order_id = p_order_id;
 
-    SELECT LAST_INSERT_ID() AS payment_id, v_change AS change_amount, v_amount AS amount;
+    -- Ligar la venta al turno abierto (obligatorio)
+    INSERT INTO shift_transactions (shift_id, order_id, type, method, amount)
+    VALUES (v_shift_id, p_order_id, 'sale', p_method, v_amount);
+
+    -- Deducir inventario segun recetas (OBLIGATORIO)
+    -- Si algun producto no tiene receta, falla y revierte todo el cobro
+    CALL sp_deduct_inventory(p_order_id);
+
+    COMMIT;
+
+    SELECT v_payment_id AS payment_id, v_change AS change_amount, v_amount AS amount;
 END //
 DELIMITER ;
 

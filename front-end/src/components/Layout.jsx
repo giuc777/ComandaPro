@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 
-export default function Layout({ children, user, onLogout }) {
+export default function Layout({ children, user, onLogout, hasModule }) {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
 
@@ -22,11 +22,11 @@ export default function Layout({ children, user, onLogout }) {
 
   return (
     <div className="min-h-screen bg-surface">
-      <Sidebar user={user} onLogout={onLogout} />
+      <Sidebar user={user} onLogout={onLogout} hasModule={hasModule} />
       <div className="main-content min-h-screen pb-24 md:pb-0">
         {children}
       </div>
-      <MobileNav />
+      <MobileNav user={user} hasModule={hasModule} />
     </div>
   );
 }

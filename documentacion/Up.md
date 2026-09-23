@@ -4,8 +4,8 @@
 
 | Usuario | Contraseña | Permisos |
 |---------|------------|----------|
-| `root` | `Di0sm34m4` | Superuser |
-| `comandapro_user` | `ComandaPro_2024!` | Full access a DB `comandapro` |
+| `root` | *(la del sistema)* | Superuser |
+| `comandapro_user` | *(ver `back-end/.env` → `DB_PASSWORD`)* | Full access a DB `comandapro` |
 
 ## Credenciales de la Aplicación
 
@@ -42,8 +42,10 @@ El servicio de MariaDB debe estar corriendo en `localhost:3306`.
 
 Verificar estado:
 ```bash
-"Program Files/MariaDB 11.4/bin/mariadb.exe" -u comandapro_user -p'ComandaPro_2024!' comandapro -e "SELECT 1;"
+"Program Files/MariaDB 11.4/bin/mariadb.exe" -u comandapro_user -p comandapro -e "SELECT 1;"
 ```
+
+*(se pedirá la contraseña interactivamente)*
 
 ## Base de datos
 
@@ -95,17 +97,37 @@ Nombre: `comandapro`
 
 ## Variables de Entorno (back-end/.env)
 
+Copia la plantilla y rellena los valores reales (el `.env` real está ignorado por git):
+
+```bash
+cp back-end/.env.example back-end/.env
+```
+
 ```env
-PORT=3001
+PORT=3000
 DB_HOST=localhost
 DB_USER=comandapro_user
-DB_PASSWORD=ComandaPro_2024!
+DB_PASSWORD=tu_password_aqui
 DB_NAME=comandapro
 
-JWT_SECRET=comandapro_jwt_secret_2024_very_secure_random_string
+JWT_SECRET=generar_string_aleatorio_largo_aqui
 JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
+# JWT_REFRESH_EXPIRES_IN=7d          # documentado pero NO usado por el código
 JWT_REFRESH_EXPIRES_DAYS=7
 
 BCRYPT_WORK_FACTOR=12
+
+# Impresora termica (AON PR-255)
+PRINTER_ENABLED=true
+PRINTER_INTERFACE=usb            # tcp | usb
+PRINTER_HOST=192.168.1.50
+PRINTER_PORT=9100
+PRINTER_USB=/dev/usb/lp0         # Linux (Raspberry Pi)
+PRINTER_WINDOWS_NAME=POS-80C     # Windows: nombre en la impresora
+PRINTER_CHARSET=CP850
+PRINTER_WIDTH=80                 # mm (80 -> 48 columnas, 58 -> 32)
+PRINTER_TIMEOUT_MS=3000
+PRINTER_DRY_RUN=false
 ```
+
+> Para la conexion detallada de la impresora, ver [print.md](print.md).

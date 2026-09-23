@@ -11,12 +11,16 @@
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ✅ Completada | FASE 02, 03 |
 | [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System | 🚧 Próximamente (fuera de alcance) | FASE 04 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ✅ Completada | FASE 04 |
-| [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ⬜ Pendiente | FASE 02, **04, 06** |
-| [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ⬜ Pendiente | FASE 07 |
-| [FASE 09](fases/FASE_09_mesas.md) | Mesas | ⬜ Pendiente | FASE 04 |
-| [FASE 10](fases/FASE_10_turnos_caja.md) | Turnos y Caja | ⬜ Pendiente | FASE 06 |
-| [FASE 11](fases/FASE_11_reportes_analytics.md) | Reportes y Analíticas | ⬜ Pendiente | FASE 06, 10 |
+| [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ✅ Completada | FASE 02, 04, 06 |
+| [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ✅ Completada | FASE 07 |
+| [FASE 09](fases/FASE_09_mesas.md) | Mesas | ✅ Completada | FASE 04 |
+| [FASE 10](fases/FASE_10_turnos_caja.md) | Turnos y Caja | ✅ Completada | FASE 06 |
+| [FASE 11](fases/FASE_11_reportes_analytics.md) | Reportes y Analíticas | ✅ Completada | FASE 06, 10 |
 | [FASE 12](fases/FASE_12_testing_deploy.md) | Testing E2E y Deploy | ⬜ Pendiente | Todas |
+| [FASE 13](fases/FASE_13_impresion_termica.md) | Impresion Termica | ✅ Completada | FASE 06 |
+| [FASE 14](fases/FASE_14_usuarios_permisos.md) | Usuarios, Permisos y Sucursal | ✅ Completada | FASE 01 |
+
+> Para la conexion de la impresora termica, ver [print.md](print.md).
 
 ---
 
@@ -35,15 +39,15 @@ Fase 1 (Auth)
                       ├──→ Fase 5 (KDS) 🚧 Próximamente
                       ├──→ Fase 6 (Pagos) ✅
                       │        │
-                      │        ├──→ Fase 7 (Inventario + Recetas)
-                      │        │        │
-                      │        │        └──→ Fase 8 (Proveedores)
+                       │        ├──→ Fase 7 (Inventario + Recetas) ✅
+                        │        │        │
+                        │        │        └──→ Fase 8 (Proveedores) ✅
                       │        │
-                      │        └──→ Fase 10 (Turnos)
-                      │                 │
-                      │                 └──→ Fase 11 (Reportes)
+                       │        └──→ Fase 10 (Turnos) ✅
+                       │                 │
+                       │                 └──→ Fase 11 (Reportes) ✅
                       │
-                      └──→ Fase 9 (Mesas)
+                       └──→ Fase 9 (Mesas) ✅
 
 Fase 12 (Testing + Deploy) — requiere todas las fases
 ```
@@ -62,6 +66,18 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > **no envía órdenes a cocina**: las **pausa** (status `pausada`) con nombre de
 > cliente y mesa, se listan para su identificación y luego se **cobran
 > manualmente** (Fase 6). Ver FASE_04 para el detalle.
+
+> **Nota (limpieza de catálogos):** Los grupos `menu_cafe` y `proveedores` fueron
+> retirados (soft-delete) por duplicar `products` y `suppliers` respectivamente.
+> Ver `database/migrations/014_limpieza_catalogos.sql`. Quedan 9 grupos activos:
+> categorías, 4 modificadores (`tamanos`, `tipo_leche`, `temperatura`, `extras`),
+> `ingredientes_principales`, `mesas` y 2 catálogos de referencia
+> (`tipos_bebida`, `metodos_preparacion`).
+
+> **Nota (receta obligatoria):** Crear o editar un producto exige al menos un
+> insumo en su receta. El flujo es `insumo → receta → producto`. Se valida en
+> `productController` y se persiste con `sp_set_product_recipe`
+> (`database/procedures/012_product_recipe_procedures.sql`).
 
 ---
 

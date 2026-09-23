@@ -26,10 +26,12 @@ export function createPaymentController(pool) {
                     [Number(order_id), method, amount_given || null, cashier_id, sat_invoice || null, applyTax]
                 );
                 const row = result[0];
+                const paymentAmount = Number(row.amount);
+
                 res.status(201).json({
                     payment_id: Number(row.payment_id),
                     change_amount: Number(row.change_amount),
-                    amount: Number(row.amount),
+                    amount: paymentAmount,
                     apply_tax: applyTax,
                     message: 'Pago registrado'
                 });

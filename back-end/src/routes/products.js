@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, adminOnly } from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
 import { uploadProductImage } from '../middleware/upload.js';
 
 export function createProductRouter(productController, tokenService, catalogController) {
@@ -17,21 +17,18 @@ export function createProductRouter(productController, tokenService, catalogCont
 
     router.post('/',
         authenticate(tokenService),
-        adminOnly,
         uploadProductImage,
         (req, res) => productController.createProduct(req, res)
     );
 
     router.put('/:id',
         authenticate(tokenService),
-        adminOnly,
         uploadProductImage,
         (req, res) => productController.updateProduct(req, res)
     );
 
     router.delete('/:id',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => productController.deleteProduct(req, res)
     );
 
@@ -47,7 +44,6 @@ export function createProductRouter(productController, tokenService, catalogCont
 
         router.put('/:id/modifiers',
             authenticate(tokenService),
-            adminOnly,
             (req, res) => catalogController.assignProductModifiers(req, res)
         );
     }

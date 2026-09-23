@@ -1,14 +1,19 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import { api } from '../api/apiClient';
+import { useConfirm } from '../hooks/useConfirm';
 
 const EMPTY_PRODUCT = {
   name: '', category_id: '', price: '', cost: '',
   description: '', badge: '', sort_order: 0
 };
 
+const EMPTY_RECIPE_ROW = { inventory_id: '', quantity: '', unit: '' };
+
 export default function ProductosPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [recipe, setRecipe] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -19,6 +24,7 @@ export default function ProductosPage() {
   const [filterCategory, setFilterCategory] = useState('');
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
+  const { confirm, confirmModal } = useConfirm();
 
   useEffect(() => { loadData(); }, []);
 
@@ -29,15 +35,18 @@ export default function ProductosPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [prods, cats] = await Promise.all([
+      const [prods, cats, inv] = await Promise.all([
         api.getProducts(filterCategory || undefined),
-        api.getCategories()
+        api.getCategories(),
+        api.listInventory()
       ]);
       setProducts(prods);
       setCategories(cats);
+      setInventoryItems(inv);
     } catch {
       setProducts([]);
       setCategories([]);
+      setInventoryItems([]);
     } finally {
       setLoading(false);
     }
@@ -58,12 +67,13 @@ export default function ProductosPage() {
   function openCreate() {
     setEditingProduct(null);
     setForm({ ...EMPTY_PRODUCT });
+    setRecipe([{ ...EMPTY_RECIPE_ROW }]);
     setImageFile(null);
     setImagePreview(null);
     setModalOpen(true);
   }
 
-  function openEdit(product) {
+  async function openEdit(product) {
     setEditingProduct(product);
     setForm({
       name: product.name || '',
@@ -76,7 +86,19 @@ export default function ProductosPage() {
     });
     setImageFile(null);
     setImagePreview(product.image ? `${api.getUploadUrl(product.image)}` : null);
+    setRecipe([]);
     setModalOpen(true);
+    try {
+      const data = await api.getProductRecipe(product.id);
+      const rows = (Array.isArray(data) ? data : []).map(r => ({
+        inventory_id: r.inventory_id,
+        quantity: r.quantity_per_unit,
+        unit: r.ingredient_unit || ''
+      }));
+      setRecipe(rows.length > 0 ? rows : [{ ...EMPTY_RECIPE_ROW }]);
+    } catch {
+      setRecipe([{ ...EMPTY_RECIPE_ROW }]);
+    }
   }
 
   function closeModal() {
@@ -84,6 +106,26 @@ export default function ProductosPage() {
     setEditingProduct(null);
     setImageFile(null);
     setImagePreview(null);
+    setRecipe([]);
+  }
+
+  function addRecipeRow() {
+    setRecipe(prev => [...prev, { ...EMPTY_RECIPE_ROW }]);
+  }
+
+  function updateRecipeRow(idx, field, value) {
+    setRecipe(prev => prev.map((row, i) => {
+      if (i !== idx) return row;
+      if (field === 'inventory_id') {
+        const inv = inventoryItems.find(x => String(x.id) === String(value));
+        return { ...row, inventory_id: value, unit: inv ? inv.unit : '' };
+      }
+      return { ...row, [field]: value };
+    }));
+  }
+
+  function removeRecipeRow(idx) {
+    setRecipe(prev => prev.filter((_, i) => i !== idx));
   }
 
   function handleImageChange(e) {
@@ -103,6 +145,25 @@ export default function ProductosPage() {
     if (!form.name.trim()) { showToast('El nombre es requerido', 'error'); return; }
     if (!form.price || Number(form.price) <= 0) { showToast('El precio debe ser mayor a 0', 'error'); return; }
 
+    const cleanRecipe = recipe
+      .filter(r => r.inventory_id && Number(r.quantity) > 0)
+      .map(r => ({
+        inventory_id: Number(r.inventory_id),
+        quantity: Number(r.quantity),
+        unit: r.unit || null
+      }));
+
+    if (cleanRecipe.length === 0) {
+      showToast('Agrega al menos un insumo con cantidad mayor a 0', 'error');
+      return;
+    }
+
+    const uniqueIds = new Set(cleanRecipe.map(r => r.inventory_id));
+    if (uniqueIds.size !== cleanRecipe.length) {
+      showToast('No puedes repetir un insumo en la receta', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
       const formData = new FormData();
@@ -113,6 +174,7 @@ export default function ProductosPage() {
       formData.append('description', form.description);
       formData.append('badge', form.badge);
       formData.append('sort_order', form.sort_order);
+      formData.append('recipe', JSON.stringify(cleanRecipe));
 
       if (imageFile) {
         formData.append('image', imageFile);
@@ -138,7 +200,14 @@ export default function ProductosPage() {
   }
 
   async function handleDelete(product) {
-    if (!confirm(`Desactivar "${product.name}"?`)) return;
+    const ok = await confirm({
+      title: 'Desactivar producto',
+      message: `¿Desactivar "${product.name}"? Dejará de aparecer en el menú y el punto de venta.`,
+      confirmLabel: 'Desactivar',
+      variant: 'danger',
+      icon: 'delete',
+    });
+    if (!ok) return;
     try {
       await api.deleteProduct(product.id);
       await loadProducts();
@@ -225,6 +294,7 @@ export default function ProductosPage() {
                     <th className="px-4 py-3 text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold">Categoria</th>
                     <th className="px-4 py-3 text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold">Precio</th>
                     <th className="px-4 py-3 text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold">Costo</th>
+                    <th className="px-4 py-3 text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold">Receta</th>
                     <th className="px-4 py-3 text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold">Badge</th>
                     <th className="px-4 py-3 text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold text-right">Acciones</th>
                   </tr>
@@ -259,6 +329,16 @@ export default function ProductosPage() {
                         <span className="text-[0.75rem] text-on-surface-variant">${Number(product.cost).toFixed(2)}</span>
                       </td>
                       <td className="px-4 py-3">
+                        {Number(product.recipe_count) > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[0.75rem] text-tertiary font-semibold">
+                            <span className="material-symbols-outlined text-[14px]">receipt_long</span>
+                            {product.recipe_count}
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-[0.625rem] font-bold bg-error/10 text-error">Sin receta</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         {product.badge ? (
                           <span className="inline-flex px-2 py-0.5 rounded-full text-[0.625rem] font-bold bg-tertiary-container text-on-tertiary-container">{product.badge}</span>
                         ) : (
@@ -286,7 +366,7 @@ export default function ProductosPage() {
 
       {modalOpen && (
         <div className="modal-overlay open" onClick={closeModal}>
-          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+          <div className="modal-content max-w-2xl w-[calc(100vw-2rem)]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg text-on-surface font-semibold">
                 {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
@@ -337,6 +417,61 @@ export default function ProductosPage() {
                   <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Orden</label>
                   <input type="number" min="0" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: Number(e.target.value) }))} className="input-field" placeholder="0" />
                 </div>
+              </div>
+
+              <div className="border-t border-outline-variant/15 pt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-on-surface-variant font-semibold uppercase tracking-wider">Receta / Insumos *</label>
+                  <button type="button" onClick={addRecipeRow} className="btn-ghost text-[0.6875rem] py-0.5">
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agregar insumo
+                  </button>
+                </div>
+                <p className="text-[0.625rem] text-on-surface-variant mb-2">
+                  Todo producto requiere insumos (insumo &rarr; receta &rarr; producto).
+                </p>
+
+                {recipe.length === 0 ? (
+                  <div className="text-[0.75rem] text-error bg-error/5 border border-error/20 rounded-lg px-3 py-2">
+                    Agrega al menos un insumo para guardar el producto.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {recipe.map((row, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <select
+                            value={row.inventory_id}
+                            onChange={e => updateRecipeRow(idx, 'inventory_id', e.target.value)}
+                            className="input-field w-full text-[0.75rem] py-2"
+                          >
+                            <option value="">Seleccionar insumo</option>
+                            {inventoryItems
+                              .filter(inv =>
+                                String(inv.id) === String(row.inventory_id) ||
+                                !recipe.some((r, i) => i !== idx && String(r.inventory_id) === String(inv.id))
+                              )
+                              .map(inv => (
+                                <option key={inv.id} value={inv.id}>{inv.name}</option>
+                              ))}
+                          </select>
+                        </div>
+                        <div className="w-20 flex-shrink-0">
+                          <input
+                            type="number" step="0.001" min="0"
+                            value={row.quantity}
+                            onChange={e => updateRecipeRow(idx, 'quantity', e.target.value)}
+                            className="input-field text-[0.75rem] py-2 text-center"
+                            placeholder="Cant."
+                          />
+                        </div>
+                        <span className="text-[0.6875rem] text-on-surface-variant w-14 text-center flex-shrink-0">{row.unit || '-'}</span>
+                        <button type="button" onClick={() => removeRecipeRow(idx)} className="p-1 rounded-full hover:bg-error-container/30 transition-colors flex-shrink-0">
+                          <span className="material-symbols-outlined text-error text-[16px]">close</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -391,6 +526,8 @@ export default function ProductosPage() {
           <span>{toast.message}</span>
         </div>
       )}
+
+      {confirmModal}
     </div>
   );
 }

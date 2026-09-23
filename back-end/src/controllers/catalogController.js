@@ -140,22 +140,40 @@ export function createCatalogController(pool) {
 
         async createItem(req, res) {
             try {
-                const { group_id, name, description, icon, color, parent_id, sort_order, price_adjustment } = req.body;
+                const { group_id, name, description, icon, color, parent_id, sort_order, price_adjustment, capacity } = req.body;
 
                 if (!group_id || !name) {
                     return res.status(400).json({ error: 'group_id y nombre requeridos' });
                 }
 
+                // Check if this is the "mesas" group
+                const groupResult = await pool.query('SELECT slug FROM catalog_groups WHERE id = ?', [group_id]);
+                const groupRows = Array.isArray(groupResult[0]) ? groupResult[0] : groupResult;
+                const isMesas = groupRows[0]?.slug === 'mesas';
+
+                if (isMesas) {
+                    const [result] = await pool.query(
+                        'CALL sp_create_mesa_with_table(?, ?, ?, ?, ?, ?, ?)',
+                        [group_id, name, description || null, icon || null, color || null, sort_order || 0, capacity || 4]
+                    );
+                    const row = Array.isArray(result[0]) ? result[0][0] : result[0];
+                    const itemId = Number(row.item_id);
+                    return res.status(201).json({
+                        id: itemId, group_id, name, description, icon, color,
+                        sort_order: sort_order || 0, capacity: capacity || 4, active: true
+                    });
+                }
+
                 const [result] = await pool.query(
-                    'CALL sp_create_catalog_item(?, ?, ?, ?, ?, ?, ?, ?)',
-                    [group_id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, price_adjustment || 0]
+                    'CALL sp_create_catalog_item(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [group_id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, price_adjustment || 0, capacity || null, null]
                 );
 
                 const itemId = Number(result[0][0].id);
 
                 res.status(201).json({
                     id: itemId, group_id, name, description, icon, color,
-                    parent_id, sort_order: sort_order || 0, price_adjustment: price_adjustment || 0, active: true
+                    parent_id, sort_order: sort_order || 0, price_adjustment: price_adjustment || 0, capacity: capacity || null, active: true
                 });
             } catch (error) {
                 if (error.code === 'ER_DUP_ENTRY') {
@@ -169,11 +187,30 @@ export function createCatalogController(pool) {
         async updateItem(req, res) {
             try {
                 const { id } = req.params;
-                const { name, description, icon, color, parent_id, sort_order, active, price_adjustment } = req.body;
+                const { name, description, icon, color, parent_id, sort_order, active, price_adjustment, capacity } = req.body;
+
+                // Check if this item belongs to "mesas" group
+                const itemResult = await pool.query(
+                    'SELECT ci.id, cg.slug FROM catalog_items ci JOIN catalog_groups cg ON ci.group_id = cg.id WHERE ci.id = ?', [id]
+                );
+                const itemRows = Array.isArray(itemResult[0]) ? itemResult[0] : itemResult;
+                const isMesas = itemRows[0]?.slug === 'mesas';
+
+                if (isMesas) {
+                    const [result] = await pool.query(
+                        'CALL sp_update_mesa_with_table(?, ?, ?, ?, ?, ?, ?, ?)',
+                        [id, name, description || null, icon || null, color || null, sort_order || 0, active !== false, capacity || null]
+                    );
+                    const row = Array.isArray(result[0]) ? result[0][0] : result[0];
+                    if (Number(row.affected) === 0) {
+                        return res.status(404).json({ error: 'Item no encontrado' });
+                    }
+                    return res.json({ success: true });
+                }
 
                 const [result] = await pool.query(
-                    'CALL sp_update_catalog_item(?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, active !== false, price_adjustment || 0]
+                    'CALL sp_update_catalog_item(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [id, name, description || null, icon || null, color || null, parent_id || null, sort_order || 0, active !== false, price_adjustment || 0, capacity || null, null]
                 );
 
                 if (Number(result[0][0].affected) === 0) {
@@ -193,6 +230,23 @@ export function createCatalogController(pool) {
         async deleteItem(req, res) {
             try {
                 const { id } = req.params;
+
+                // Check if this item belongs to "mesas" group
+                const itemResult = await pool.query(
+                    'SELECT ci.id, cg.slug FROM catalog_items ci JOIN catalog_groups cg ON ci.group_id = cg.id WHERE ci.id = ?', [id]
+                );
+                const itemRows = Array.isArray(itemResult[0]) ? itemResult[0] : itemResult;
+                const isMesas = itemRows[0]?.slug === 'mesas';
+
+                if (isMesas) {
+                    const [result] = await pool.query('CALL sp_delete_mesa_with_table(?)', [id]);
+                    const row = Array.isArray(result[0]) ? result[0][0] : result[0];
+                    if (Number(row.affected) === 0) {
+                        return res.status(404).json({ error: 'Item no encontrado' });
+                    }
+                    return res.json({ success: true });
+                }
+
                 const [result] = await pool.query('CALL sp_delete_catalog_item(?)', [id]);
 
                 if (Number(result[0][0].affected) === 0) {

@@ -18,6 +18,16 @@ export function useAuth() {
         setLoading(false);
     }, []);
 
+    useEffect(() => {
+        if (!localStorage.getItem('user')) return;
+        api.getProfile().then(data => {
+            if (data && !data.error && data.role) {
+                localStorage.setItem('user', JSON.stringify(data));
+                setUser(data);
+            }
+        }).catch(() => {});
+    }, []);
+
     const login = useCallback(async (username, password) => {
         setError(null);
         try {
@@ -33,7 +43,7 @@ export function useAuth() {
             localStorage.setItem('user', JSON.stringify(data.user));
             setUser(data.user);
             return true;
-        } catch (err) {
+        } catch {
             setError('Error de conexión');
             return false;
         }
@@ -53,6 +63,12 @@ export function useAuth() {
         }
     }, []);
 
+    const hasModule = useCallback((moduleKey) => {
+        if (!user) return false;
+        if (user.role === 'Administrador') return true;
+        return user.permissions?.includes(moduleKey) ?? false;
+    }, [user]);
+
     const isAdmin = user?.role === 'Administrador';
 
     return {
@@ -62,6 +78,7 @@ export function useAuth() {
         login,
         logout,
         isAdmin,
+        hasModule,
         isAuthenticated: !!user
     };
 }

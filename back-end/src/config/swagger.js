@@ -325,6 +325,55 @@ const options = {
                 },
 
                 // ========================
+                // SHIFTS
+                // ========================
+                Shift: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', example: 1 },
+                        cashier_id: { type: 'integer', example: 1 },
+                        cashier_name: { type: 'string', example: 'Administrador' },
+                        station: { type: 'string', example: 'Estacion 01' },
+                        start_time: { type: 'string', format: 'date-time' },
+                        close_time: { type: 'string', format: 'date-time', nullable: true },
+                        start_cash: { type: 'number', format: 'float', example: 200.00 },
+                        actual_cash: { type: 'number', format: 'float', nullable: true },
+                        expected_cash: { type: 'number', format: 'float', nullable: true },
+                        difference: { type: 'number', format: 'float', nullable: true },
+                        status: { type: 'string', enum: ['open', 'closed'], example: 'open' },
+                        total_sales: { type: 'number', format: 'float', example: 0 },
+                        cash_sales: { type: 'number', format: 'float', example: 0 },
+                        card_sales: { type: 'number', format: 'float', example: 0 },
+                        qr_sales: { type: 'number', format: 'float', example: 0 },
+                        transaction_count: { type: 'integer', example: 0 }
+                    }
+                },
+                OpenShiftRequest: {
+                    type: 'object',
+                    required: ['start_cash'],
+                    properties: {
+                        start_cash: { type: 'number', format: 'float', example: 200.00, description: 'Efectivo inicial en caja' },
+                        station: { type: 'string', example: 'Estacion 01', description: 'Nombre de la estacion de trabajo' }
+                    }
+                },
+                CloseShiftRequest: {
+                    type: 'object',
+                    required: ['actual_cash'],
+                    properties: {
+                        actual_cash: { type: 'number', format: 'float', example: 1270.00, description: 'Efectivo contado fisicamente' }
+                    }
+                },
+                ShiftArqueo: {
+                    type: 'object',
+                    properties: {
+                        cash_total: { type: 'number', format: 'float', example: 800.00 },
+                        card_total: { type: 'number', format: 'float', example: 350.00 },
+                        qr_total: { type: 'number', format: 'float', example: 100.00 },
+                        transaction_count: { type: 'integer', example: 25 }
+                    }
+                },
+
+                // ========================
                 // ERROR
                 // ========================
                 Error: {

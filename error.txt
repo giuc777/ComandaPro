@@ -1,0 +1,9 @@
+Server response
+Code	Details
+Undocumented
+Failed to fetch.
+Possible Reasons:
+
+CORS
+Network Failure
+URL scheme must be "http" or "https" for CORS request.

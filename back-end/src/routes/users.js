@@ -9,23 +9,14 @@ export function createUserRouter(userController, tokenService) {
      * /api/users:
      *   get:
      *     tags: [Users]
-     *     summary: Listar usuarios
-     *     description: Retorna todos los usuarios activos (solo administradores)
+     *     summary: Listar usuarios (admin)
      *     security:
      *       - bearerAuth: []
      *     responses:
      *       200:
-     *         description: Lista de usuarios
-     *         content:
-     *           application/json:
-     *             schema:
-     *               type: array
-     *               items:
-     *                 $ref: '#/components/schemas/User'
-     *       401:
-     *         description: No autenticado
+     *         description: Lista de usuarios (incluye inactivos y bloqueados)
      *       403:
-     *         description: Acceso denegado (solo administradores)
+     *         description: Acceso denegado
      */
     router.get('/', authenticate(tokenService), adminOnly, (req, res) => userController.list(req, res));
 
@@ -34,8 +25,7 @@ export function createUserRouter(userController, tokenService) {
      * /api/users:
      *   post:
      *     tags: [Users]
-     *     summary: Crear usuario
-     *     description: Crea un nuevo usuario en el sistema (solo administradores)
+     *     summary: Crear usuario (admin)
      *     security:
      *       - bearerAuth: []
      *     requestBody:
@@ -43,18 +33,14 @@ export function createUserRouter(userController, tokenService) {
      *       content:
      *         application/json:
      *           schema:
-     *             $ref: '#/components/schemas/CreateUserRequest'
-     *     responses:
-     *       201:
-     *         description: Usuario creado exitosamente
-     *       400:
-     *         description: Datos inválidos
-     *       401:
-     *         description: No autenticado
-     *       403:
-     *         description: Acceso denegado (solo administradores)
-     *       409:
-     *         description: El username ya existe
+     *             type: object
+     *             required: [username, password, name]
+     *             properties:
+     *               username: { type: string }
+     *               password: { type: string }
+     *               name: { type: string }
+     *               email: { type: string }
+     *               role: { type: string, enum: [Administrador, Barista, Cajero] }
      */
     router.post('/', authenticate(tokenService), adminOnly, (req, res) => userController.create(req, res));
 
@@ -63,72 +49,42 @@ export function createUserRouter(userController, tokenService) {
      * /api/users/{id}:
      *   put:
      *     tags: [Users]
-     *     summary: Actualizar usuario
-     *     description: Actualiza la información de un usuario (solo administradores)
+     *     summary: Actualizar usuario (admin)
      *     security:
      *       - bearerAuth: []
-     *     parameters:
-     *       - in: path
-     *         name: id
-     *         required: true
-     *         schema:
-     *           type: integer
-     *         description: ID del usuario
-     *     requestBody:
-     *       required: true
-     *       content:
-     *         application/json:
-     *           schema:
-     *             type: object
-     *             properties:
-     *               name:
-     *                 type: string
-     *               email:
-     *                 type: string
-     *               role:
-     *                 type: string
-     *                 enum: [Administrador, Barista, Cajero]
-     *               active:
-     *                 type: boolean
-     *     responses:
-     *       200:
-     *         description: Usuario actualizado
-     *       401:
-     *         description: No autenticado
-     *       403:
-     *         description: Acceso denegado (solo administradores)
-     *       404:
-     *         description: Usuario no encontrado
      */
     router.put('/:id', authenticate(tokenService), adminOnly, (req, res) => userController.update(req, res));
+
+    /**
+     * @swagger
+     * /api/users/{id}/password:
+     *   put:
+     *     tags: [Users]
+     *     summary: Cambiar contraseña de usuario (admin)
+     *     security:
+     *       - bearerAuth: []
+     */
+    router.put('/:id/password', authenticate(tokenService), adminOnly, (req, res) => userController.setPassword(req, res));
+
+    /**
+     * @swagger
+     * /api/users/{id}/unlock:
+     *   put:
+     *     tags: [Users]
+     *     summary: Desbloquear usuario (admin)
+     *     security:
+     *       - bearerAuth: []
+     */
+    router.put('/:id/unlock', authenticate(tokenService), adminOnly, (req, res) => userController.unlock(req, res));
 
     /**
      * @swagger
      * /api/users/{id}:
      *   delete:
      *     tags: [Users]
-     *     summary: Desactivar usuario
-     *     description: Desactiva un usuario (borrado lógico, solo administradores)
+     *     summary: Desactivar usuario (admin)
      *     security:
      *       - bearerAuth: []
-     *     parameters:
-     *       - in: path
-     *         name: id
-     *         required: true
-     *         schema:
-     *           type: integer
-     *         description: ID del usuario
-     *     responses:
-     *       200:
-     *         description: Usuario desactivado
-     *       400:
-     *         description: No puedes desactivarte a ti mismo
-     *       401:
-     *         description: No autenticado
-     *       403:
-     *         description: Acceso denegado (solo administradores)
-     *       404:
-     *         description: Usuario no encontrado
      */
     router.delete('/:id', authenticate(tokenService), adminOnly, (req, res) => userController.delete(req, res));
 

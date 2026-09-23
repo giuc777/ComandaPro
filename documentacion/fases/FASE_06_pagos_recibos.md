@@ -61,44 +61,84 @@ CREATE INDEX idx_payments_method ON payments(method);
 
 ```sql
 -- Registrar pago (manual) de una orden pausada
+-- Requiere un turno de caja abierto (FASE 10)
 DELIMITER //
 CREATE PROCEDURE sp_record_payment(
     IN p_order_id INT,
     IN p_method ENUM('efectivo','tarjeta','qr'),
     IN p_amount_given DECIMAL(10,2),
     IN p_cashier_id INT,
-    IN p_sat_invoice VARCHAR(50)
+    IN p_sat_invoice VARCHAR(50),
+    IN p_apply_tax BOOLEAN
 )
 BEGIN
+    DECLARE v_subtotal DECIMAL(10,2);
     DECLARE v_total DECIMAL(10,2);
+    DECLARE v_amount DECIMAL(10,2);
     DECLARE v_status VARCHAR(20);
     DECLARE v_change DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_shift_id INT DEFAULT NULL;
 
     -- Validar estado de la orden
-    SELECT total, status INTO v_total, v_status FROM orders WHERE id = p_order_id;
+    SELECT subtotal, total, status INTO v_subtotal, v_total, v_status
+    FROM orders WHERE id = p_order_id;
+
+    IF v_status IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Orden no encontrada';
+    END IF;
 
     IF v_status <> 'pausada' THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Solo se pueden cobrar ordenes en estado pausada';
     END IF;
 
+    -- Exigir un turno de caja abierto
+    SELECT id INTO v_shift_id
+    FROM shifts WHERE status = 'open'
+    ORDER BY start_time DESC LIMIT 1;
+
+    IF v_shift_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Debe abrir un turno de caja antes de cobrar';
+    END IF;
+
+    -- Monto a cobrar: con IVA (total) o sin IVA (subtotal)
+    IF p_apply_tax = FALSE THEN
+        SET v_amount = v_subtotal;
+    ELSE
+        SET v_amount = v_total;
+    END IF;
+
     -- Calcular cambio (solo efectivo)
     IF p_method = 'efectivo' AND p_amount_given IS NOT NULL THEN
-        SET v_change = p_amount_given - v_total;
+        SET v_change = p_amount_given - v_amount;
     END IF;
 
     -- Insertar pago
-    INSERT INTO payments (order_id, method, amount, amount_given, change_amount, cashier_id, sat_invoice)
-    VALUES (p_order_id, p_method, v_total, p_amount_given, v_change, p_cashier_id, p_sat_invoice);
+    INSERT INTO payments (order_id, method, amount, amount_given, change_amount,
+                          cashier_id, sat_invoice)
+    VALUES (p_order_id, p_method, v_amount, p_amount_given, v_change,
+            p_cashier_id, p_sat_invoice);
 
-    -- Actualizar orden a pagada
-    UPDATE orders SET status = 'pagada' WHERE id = p_order_id;
+    -- Actualizar orden a pagada (y ajustar IVA si no se aplico)
+    IF p_apply_tax = FALSE THEN
+        UPDATE orders SET status = 'pagada', tax = 0, total = subtotal
+        WHERE id = p_order_id;
+    ELSE
+        UPDATE orders SET status = 'pagada' WHERE id = p_order_id;
+    END IF;
 
     -- Liberar mesa (queda sucia para limpieza)
     UPDATE tables SET status = 'dirty', current_order_id = NULL
     WHERE current_order_id = p_order_id;
 
-    SELECT LAST_INSERT_ID() AS payment_id, v_change AS change_amount;
+    -- Ligar la venta al turno abierto (obligatorio)
+    INSERT INTO shift_transactions (shift_id, order_id, type, method, amount)
+    VALUES (v_shift_id, p_order_id, 'sale', p_method, v_amount);
+
+    SELECT LAST_INSERT_ID() AS payment_id, v_change AS change_amount,
+           v_amount AS amount;
 END //
 DELIMITER ;
 
@@ -247,6 +287,7 @@ test('flujo de cobro completo', async ({ page }) => {
 - [x] Cálculo de cambio solo para efectivo
 - [x] Tarjeta y QR solo **registran** el método (sin procesar pago)
 - [x] Solo se pueden cobrar órdenes en estado `pausada`
+- [x] **Se requiere un turno de caja abierto** para cobrar (FASE 10)
 - [x] Pago registra en tabla `payments` con `cashier_id`
 - [x] Orden cambia status a `pagada`
 - [x] Mesa se libera (status = dirty)
@@ -263,7 +304,7 @@ test('flujo de cobro completo', async ({ page }) => {
 `CajaPage` detecta `?order=<id>` y muestra el formulario de cobro con el resumen
 de la orden, selector de metodo, formulario de efectivo (con presets y calculo en
 vivo) y boton de cobrar. Sin `?order=` muestra la pantalla de caja/turnos
-(placeholder FASE_10).
+(FASE 10: apertura, cierre, historial).
 
 ### IVA opcional
 En la pantalla de cobro hay un check **"Aplicar IVA 12%"** (activo por defecto).
@@ -277,11 +318,12 @@ recibe como parametro (`p_apply_tax`). Si se omite, el default es `true`.
 ### Flujo de cobro
 1. El POS (ParkedOrdersPanel) navega a `/caja?order=<id>` al presionar "Cobrar"
 2. CajaPage carga la orden con items via `GET /api/orders/:id`
-3. Selecciona metodo de pago y (opcional) desmarca "Aplicar IVA 12%"
-4. Si efectivo: formulario con monto recibido + calculo de cambio + presets (Q25, Q50, Q100)
-5. Boton "Cobrar Q XX.00" llama `POST /api/payments`
-6. Backend: `sp_record_payment` valida status=pausada, aplica/omite IVA, calcula cambio, inserta pago, cambia orden a pagada, libera mesa
-7. Frontend muestra modal de recibo y redirige a `/pos`
+3. Si no hay turno abierto, se muestra aviso "Abre caja para cobrar" y se bloquea el pago
+4. Selecciona metodo de pago y (opcional) desmarca "Aplicar IVA 12%"
+5. Si efectivo: formulario con monto recibido + calculo de cambio + presets (Q25, Q50, Q100)
+6. Boton "Cobrar Q XX.00" llama `POST /api/payments`
+7. Backend: `sp_record_payment` valida status=pausada, valida turno abierto, aplica/omite IVA, calcula cambio, inserta pago, cambia orden a pagada, libera mesa, registra en shift_transactions
+8. Frontend muestra modal de recibo y redirige a `/pos`
 
 ### Vinculacion mesa-orden
 `sp_create_parked_order` ahora vincula la mesa (`tables.status='occupied'`,

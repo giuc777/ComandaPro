@@ -80,3 +80,20 @@ catalog_groups ──── catalog_items (FK group_id, self-ref parent_id)
 - `sp_update_catalog_item` - Actualizar item
 - `sp_delete_catalog_item` - Soft delete item
 - `sp_check_catalog_slug_unique` - Verificar slug
+
+### Fase 14 - Usuarios, Permisos y Sucursal
+- `migrations/015_usuarios_permisos.sql` - Tablas `settings` + `role_permissions` (con semilla de sucursal y matriz de permisos)
+- `procedures/013_user_admin_procedures.sql`:
+  - `sp_list_users_admin` - Listar todos los usuarios (incluye inactivos/bloqueados)
+  - `sp_get_user_by_id` - Perfil por ID
+  - `sp_update_user` - Actualización parcial (redefinido con `COALESCE`)
+  - `sp_set_user_active` - Activar/desactivar
+  - `sp_get_settings` / `sp_update_setting` - Configuración global
+  - `sp_get_role_permissions` / `sp_set_role_permission` / `sp_get_permissions_for_role` - Permisos por rol
+
+**Tablas nuevas:**
+
+| Tabla | Descripción |
+|-------|-------------|
+| `settings` | Configuración global key-value (p. ej. `sucursal_nombre`) |
+| `role_permissions` | Matriz `role` × `module_key` → `allowed` |

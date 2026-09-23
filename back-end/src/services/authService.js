@@ -4,6 +4,39 @@ export class AuthService {
         this.tokenService = tokenService;
     }
 
+    async _getPermissionsForRole(role) {
+        if (role === 'Administrador') {
+            return ['dashboard','pos','kds','caja','productos','inventario','proveedores','catalogos','reportes','ajustes'];
+        }
+        const [result] = await this.pool.query('CALL sp_get_permissions_for_role(?)', [role]);
+        const rows = Array.isArray(result[0]) ? result[0] : result;
+        return rows.filter(r => r.allowed).map(r => r.module_key);
+    }
+
+    async _getGlobalSucursal() {
+        const [result] = await this.pool.query("CALL sp_get_settings()");
+        const rows = Array.isArray(result[0]) ? result[0] : result;
+        const s = rows.find(r => r.setting_key === 'sucursal_nombre');
+        return s ? s.setting_value : 'Roma Norte';
+    }
+
+    async _buildUserResponse(user) {
+        const [permissions, sucursal] = await Promise.all([
+            this._getPermissionsForRole(user.role),
+            this._getGlobalSucursal()
+        ]);
+        return {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            avatar: user.avatar,
+            sucursal,
+            permissions
+        };
+    }
+
     async login(username, password, userAgent, ipAddress) {
         const [rows] = await this.pool.query(
             'CALL sp_get_user_by_username(?)',
@@ -49,16 +82,10 @@ export class AuthService {
                 ipAddress
             );
 
+        const userResponse = await this._buildUserResponse(user);
+
         return {
-            user: {
-                id: user.id,
-                username: user.username,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                avatar: user.avatar,
-                sucursal: user.sucursal
-            },
+            user: userResponse,
             accessToken,
             refreshToken: rawToken,
             refreshTokenExpiresAt: expiresAt
@@ -90,16 +117,17 @@ export class AuthService {
             role: data.role
         });
 
+        const userResponse = await this._buildUserResponse({
+            id: data.user_id,
+            username: data.username,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            avatar: data.avatar
+        });
+
         return {
-            user: {
-                id: data.user_id,
-                username: data.username,
-                name: data.name,
-                email: data.email,
-                role: data.role,
-                avatar: data.avatar,
-                sucursal: data.sucursal
-            },
+            user: userResponse,
             accessToken,
             refreshToken: rawToken,
             refreshTokenExpiresAt: expiresAt
@@ -133,6 +161,26 @@ export class AuthService {
         return { success: true };
     }
 
+    async changePassword(userId, currentPassword, newPassword) {
+        const [userRows] = await this.pool.query(
+            'SELECT id, password_hash FROM users WHERE id = ?', [userId]
+        );
+        const user = Array.isArray(userRows) ? userRows[0] : userRows;
+
+        if (!user) {
+            return { error: 'Usuario no encontrado', status: 404 };
+        }
+
+        const valid = await this.tokenService.comparePassword(currentPassword, user.password_hash);
+        if (!valid) {
+            return { error: 'Contraseña actual incorrecta', status: 400 };
+        }
+
+        const hash = await this.tokenService.hashPassword(newPassword);
+        await this.pool.query('CALL sp_change_password(?, ?)', [userId, hash]);
+        return { success: true };
+    }
+
     async getProfile(userId) {
         const [rows] = await this.pool.query(
             'CALL sp_get_user_by_id(?)',
@@ -144,14 +192,6 @@ export class AuthService {
             return { error: 'Usuario no encontrado', status: 404 };
         }
 
-        return {
-            id: user.id,
-            username: user.username,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            avatar: user.avatar,
-            sucursal: user.sucursal
-        };
+        return this._buildUserResponse(user);
     }
 }

@@ -12,11 +12,13 @@ import ReportesPage from './pages/ReportesPage';
 import CatalogosPage from './pages/CatalogosPage';
 import CatalogoDetallePage from './pages/CatalogoDetallePage';
 import ProductosPage from './pages/ProductosPage';
+import UsuariosPage from './pages/UsuariosPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import ModuleRoute from './components/ModuleRoute';
 import Layout from './components/Layout';
 
 function App() {
-    const { user, loading, error, login, logout, isAuthenticated } = useAuth();
+    const { user, loading, error, login, logout, isAuthenticated, hasModule } = useAuth();
 
     if (loading) {
         return (
@@ -28,7 +30,7 @@ function App() {
 
     return (
         <BrowserRouter>
-            <Layout user={user} onLogout={logout}>
+            <Layout user={user} onLogout={logout} hasModule={hasModule}>
                 <Routes>
                     <Route
                         path="/login"
@@ -52,7 +54,9 @@ function App() {
                         path="/pos"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <PosPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="pos">
+                                    <PosPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -60,7 +64,9 @@ function App() {
                         path="/kds"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <KdsPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="kds">
+                                    <KdsPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -68,7 +74,9 @@ function App() {
                         path="/caja"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <CajaPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="caja">
+                                    <CajaPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -76,7 +84,9 @@ function App() {
                         path="/inventario"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <InventarioPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="inventario">
+                                    <InventarioPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -84,7 +94,9 @@ function App() {
                         path="/proveedores"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <ProveedoresPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="proveedores">
+                                    <ProveedoresPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -92,7 +104,9 @@ function App() {
                         path="/reportes"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <ReportesPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="reportes">
+                                    <ReportesPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -100,7 +114,9 @@ function App() {
                         path="/catalogos"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <CatalogosPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="catalogos">
+                                    <CatalogosPage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -108,7 +124,9 @@ function App() {
                         path="/catalogos/:slug"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <CatalogoDetallePage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="catalogos">
+                                    <CatalogoDetallePage />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />
@@ -116,7 +134,19 @@ function App() {
                         path="/productos"
                         element={
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-                                <ProductosPage />
+                                <ModuleRoute hasModule={hasModule} moduleKey="productos">
+                                    <ProductosPage />
+                                </ModuleRoute>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/usuarios"
+                        element={
+                            <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+                                <ModuleRoute hasModule={() => user?.role === 'Administrador'} moduleKey="usuarios">
+                                    <UsuariosPage user={user} />
+                                </ModuleRoute>
                             </ProtectedRoute>
                         }
                     />

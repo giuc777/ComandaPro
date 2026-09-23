@@ -264,10 +264,59 @@ test('flujo de turno: abrir, operar, cerrar', async ({ page }) => {
 
 ## 6. Criterios de Aceptación
 
-- [ ] Abrir turno guarda start_cash y hora
-- [ ] No se puede abrir turno si ya hay uno abierto en la estación
-- [ ] Cerrar turno calcula expected_cash y difference
-- [ ] Arqueo muestra desglose por denominación
-- [ ] Historial muestra turnos cerrados con totales
-- [ ] Transacciones se registran durante el turno
-- [ ] Sobrante/faltante se muestra claramente
+- [x] Abrir turno guarda start_cash y hora
+- [x] No se puede abrir turno si ya hay uno abierto en la estación
+- [x] Cerrar turno calcula expected_cash y difference
+- [x] Arqueo muestra desglose por denominación
+- [x] Historial muestra turnos cerrados con totales
+- [x] Transacciones se registran durante el turno
+- [x] Sobrante/faltante se muestra claramente
+
+---
+
+## 7. Correcciones post-implementación
+
+Durante las pruebas se detectaron y corrigieron tres problemas de esquema que
+se arrastraban desde el diseño inicial (`01_create_tables.sql`):
+
+### 7.1 Enum de método desalineado
+`shift_transactions.method` quedó con el enum original en inglés
+(`cash`,`card`,`qr`) mientras que `payments.method` usa el enum en español
+(`efectivo`,`tarjeta`,`qr`). Cada intento de registrar una venta en el turno
+fallaba con `Data truncated for column 'method'` — y como el enlace era
+*best-effort* (en `paymentController`), el error se silenciaba y las ventas
+nunca aparecían en Caja.
+
+- **Migración:** `database/migrations/009_shift_method_enum.sql`
+- **Causa raíz eliminada:** el enlace pago→turno ahora vive **dentro de
+  `sp_record_payment`** (atómico), no en el controller.
+
+### 7.2 Faltaban columnas de totales en `shifts`
+La tabla `shifts` no tenía `total_sales`, `cash_sales`, `card_sales`,
+`qr_sales` ni `transaction_count`, que `sp_close_shift` escribe al cerrar el
+turno. Cerrar un turno devolvía 500:
+`Unknown column 'total_sales' in 'field list'`.
+
+- **Migración:** `database/migrations/010_shifts_totals_columns.sql`
+
+### 7.3 Backfill de ventas históricas
+Los pagos registrados durante un turno antes del arreglo no quedaron ligados.
+Se agregó un script idempotente que los liga retroactivamente:
+
+- **Migración:** `database/migrations/008_shift_backfill.sql`
+
+### 7.4 UX del cierre
+El error del cierre se mostraba **detrás** del `ArqueoModal`, por lo que un
+fallo parecía "no hace nada". Ahora el `ArqueoModal` recibe y muestra la prop
+`error`, y el modal siempre se puede descartar (X / Cancelar / fondo).
+
+### 7.5 El cobro exige un turno de caja abierto
+Antes se podía cobrar una orden pausada **sin haber abierto caja**, lo que
+dejaba ventas fuera del turno (no aparecían en Caja).
+
+- **Backend:** `sp_record_payment` valida al inicio que exista un turno
+  `open`; si no, lanza `SIGNAL 45000` con el mensaje
+  *"Debe abrir un turno de caja antes de cobrar"* (el controller lo traduce a
+  HTTP 409). El enlace de la venta al turno pasó a ser obligatorio.
+- **Frontend:** `PaymentView` exige `shift` en `canPay`, oculta los controles
+  de pago y muestra un aviso con botón **Abrir Caja** cuando no hay turno.

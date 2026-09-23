@@ -137,9 +137,10 @@ INSERT INTO tables (name, capacity) VALUES
 
 ## 6. Criterios de Aceptación
 
-- [ ] Grid de mesas muestra estado actual (libre/ocupada/sucia)
-- [ ] Selector de mesa en POS muestra solo mesas libres
-- [ ] Al crear orden, mesa se marca como ocupada
-- [ ] Al cobrar, mesa se marca como sucia
-- [ ] Al limpiar, mesa vuelve a libre
-- [ ] Mesa muestra orden activa si está ocupada
+- [x] Grid de mesas muestra estado actual (libre/ocupada/sucia)
+- [x] Selector de mesa en POS muestra solo mesas libres por defecto
+- [x] Al crear orden, mesa se marca como ocupada
+- [x] Al cobrar, mesa se marca como sucia
+- [x] Al limpiar, mesa vuelve a libre
+- [x] Mesas editables desde Catálogos (grupo "Mesas") con capacidad
+- [x] TableSelector muestra puntos de color por status

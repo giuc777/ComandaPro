@@ -21,7 +21,6 @@ CREATE TABLE suppliers (
     address TEXT,
     status ENUM('Activo', 'Inactivo') DEFAULT 'Activo',
     notes TEXT,
-    pending_payment DECIMAL(10,2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -64,8 +63,7 @@ CREATE INDEX idx_po_status ON purchase_orders(status);
 DELIMITER //
 CREATE PROCEDURE sp_list_suppliers()
 BEGIN
-    SELECT id, name, contact_name, phone, email, address, status,
-           pending_payment, created_at
+    SELECT id, name, contact_name, phone, email, address, status, created_at
     FROM suppliers
     WHERE status = 'Activo'
     ORDER BY name;
@@ -77,8 +75,7 @@ DELIMITER //
 CREATE PROCEDURE sp_get_supplier_detail(IN p_supplier_id INT)
 BEGIN
     -- Info del proveedor
-    SELECT id, name, contact_name, phone, email, address, status,
-           pending_payment, notes
+    SELECT id, name, contact_name, phone, email, address, status, notes
     FROM suppliers WHERE id = p_supplier_id;
 
     -- Historial de órdenes de compra
@@ -157,13 +154,17 @@ DELIMITER ;
 
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| `GET` | `/api/suppliers` | Listar proveedores | Sí |
+| `GET` | `/api/suppliers` | Listar proveedores (Activo/Inactivo/all) | Sí |
 | `GET` | `/api/suppliers/:id` | Detalle con historial | Sí |
 | `POST` | `/api/suppliers` | Crear proveedor | Admin |
 | `PUT` | `/api/suppliers/:id` | Actualizar proveedor | Admin |
+| `GET` | `/api/purchase-orders` | Listar órdenes de compra | Sí |
 | `POST` | `/api/purchase-orders` | Crear PO | Admin |
+| `GET` | `/api/purchase-orders/:id` | Detalle PO con ítems | Sí |
 | `POST` | `/api/purchase-orders/:id/items` | Agregar ítem a PO | Admin |
-| `PUT` | `/api/purchase-orders/:id/receive` | Recibir PO | Admin |
+| `DELETE` | `/api/purchase-orders/:id/items/:itemId` | Eliminar ítem de PO | Admin |
+| `PUT` | `/api/purchase-orders/:id/receive` | Recibir PO (actualiza inventario) | Admin |
+| `PUT` | `/api/purchase-orders/:id/cancel` | Cancelar PO | Admin |
 
 ---
 
@@ -172,34 +173,32 @@ DELIMITER ;
 ```
 front-end/src/
 ├── pages/
-│   ├── SuppliersPage.jsx
-│   └── SupplierDetailPage.jsx
-├── components/
-│   ├── SupplierCard.jsx
-│   ├── SupplierForm.jsx
-│   ├── PurchaseOrderForm.jsx
-│   └── PurchaseOrderHistory.jsx
+│   └── ProveedoresPage.jsx        # Lista + detalle inline (tabs Proveedor/Historial)
 └── api/
-    └── suppliers.js
+    └── apiClient.js               # Métodos: suppliers + purchaseOrders
 ```
+
+> **Nota:** La implementación usa una sola página (`ProveedoresPage`) con vista
+> de lista y detalle inline, en lugar de páginas separadas. Los flujos de
+> creación de PO, agregar ítems, recibir y cancelar se manejan con modales.
 
 ---
 
 ## 5. Datos Semilla
 
 ```sql
-INSERT INTO suppliers (name, contact_name, phone, email, address, pending_payment) VALUES
-('Cafés del Valle S.A.', 'Roberto Méndez', '+502 5555-0101', 'ventas@cafesdelvalle.com', 'Zona 10, Guatemala', 0),
-('Lácteos Frescos Ltda.', 'María García', '+502 5555-0102', 'pedidos@lacteosfrescos.com', 'Carretera a El Salvador', 2500.00),
-('Importaciones Gourmet', 'Carlos Ruiz', '+502 5555-0103', 'info@importacionesgourmet.com', 'Zona 4, Guatemala', 0);
+INSERT INTO suppliers (name, contact_name, phone, email, address) VALUES
+('Cafés del Valle S.A.', 'Roberto Méndez', '+502 5555-0101', 'ventas@cafesdelvalle.com', 'Zona 10, Guatemala'),
+('Lácteos Frescos Ltda.', 'María García', '+502 5555-0102', 'pedidos@lacteosfrescos.com', 'Carretera a El Salvador'),
+('Importaciones Gourmet', 'Carlos Ruiz', '+502 5555-0103', 'info@importacionesgourmet.com', 'Zona 4, Guatemala');
 ```
 
 ---
 
 ## 6. Criterios de Aceptación
 
-- [ ] Lista de proveedores muestra info de contacto y saldo pendiente
-- [ ] Detalle muestra historial de órdenes de compra
-- [ ] Se puede crear orden de compra con múltiples ítems
-- [ ] Recibir PO actualiza inventario automáticamente
-- [ ] Admin puede gestionar proveedores y POs
+- [x] Lista de proveedores muestra info de contacto y saldo pendiente
+- [x] Detalle muestra historial de órdenes de compra
+- [x] Se puede crear orden de compra con múltiples ítems
+- [x] Recibir PO actualiza inventario automáticamente
+- [x] Admin puede gestionar proveedores y POs

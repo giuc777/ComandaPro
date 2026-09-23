@@ -163,6 +163,11 @@ CREATE TABLE shifts (
     expected_cash DECIMAL(10,2),
     difference DECIMAL(10,2),
     status ENUM('open', 'closed') DEFAULT 'open',
+    total_sales DECIMAL(10,2) DEFAULT 0,
+    cash_sales DECIMAL(10,2) DEFAULT 0,
+    card_sales DECIMAL(10,2) DEFAULT 0,
+    qr_sales DECIMAL(10,2) DEFAULT 0,
+    transaction_count INT DEFAULT 0,
     FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -174,7 +179,7 @@ CREATE TABLE shift_transactions (
     shift_id INT NOT NULL,
     order_id INT,
     type ENUM('sale', 'refund', 'void') NOT NULL,
-    method ENUM('cash', 'card', 'qr') NOT NULL,
+    method ENUM('efectivo', 'tarjeta', 'qr') NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE,

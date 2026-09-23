@@ -373,15 +373,24 @@ ON DUPLICATE KEY UPDATE quantity_per_unit=VALUES(quantity_per_unit);
 
 ## 7. Criterios de Aceptación
 
-- [ ] Inventario muestra todos los insumos con stock actual
-- [ ] Insumos con stock ≤ min_stock muestran badge "crítico"
-- [ ] Crear insumo requiere seleccionar un ingrediente del catálogo `ingredientes_principales`
-- [ ] Recetas muestran ingredientes y cantidades por unidad
-- [ ] Costo de producto se calcula desde receta y se compara con `products.cost`
-- [ ] Al cobrar una orden, el inventario se deduce automáticamente según recetas
-- [ ] Si un producto vendido no tiene receta, el cobro falla y hace rollback
-- [ ] La deducción se ejecuta dentro de la transacción de pago (atómica)
-- [ ] Admin puede actualizar stock manualmente (conteo físico / mermas)
+- [x] Inventario muestra todos los insumos con stock actual
+- [x] Insumos con stock ≤ min_stock muestran badge "crítico"
+- [x] Crear insumo requiere seleccionar un ingrediente del catálogo `ingredientes_principales`
+- [x] Recetas muestran ingredientes y cantidades por unidad
+- [x] Costo de producto se calcula desde receta y se compara con `products.cost`
+- [x] Al cobrar una orden, el inventario se deduce automáticamente según recetas
+- [x] Si un producto vendido no tiene receta, el cobro falla y hace rollback
+- [x] La deducción se ejecuta dentro de la transacción de pago (atómica)
+- [x] Admin puede actualizar stock manualmente (conteo físico / mermas)
+- [x] **Crear/editar producto exige al menos un insumo (receta obligatoria)** — flujo `insumo → receta → producto`
+
+---
+
+> **Nota (receta obligatoria):** El formulario de productos exige al menos un
+> insumo en la receta para crear o guardar. El backend valida esto en
+> `productController.createProduct` / `updateProduct` y persiste la receta con
+> `sp_set_product_recipe` (reemplaza la receta completa de forma atómica).
+> Ver `database/procedures/012_product_recipe_procedures.sql`.
 
 ---
 

@@ -8,6 +8,7 @@ const MOCK_GROUPS = [
   { id: 3, name: 'Tamanos', slug: 'tamanos', description: 'Tamanos disponibles para bebidas y comidas', icon: 'straighten', color: '#006b3f', item_count: 4, sort_order: 3 },
   { id: 4, name: 'Metodos de Preparacion', slug: 'metodos_preparacion', description: 'Formas de preparar las bebidas', icon: 'science', color: '#9c4221', item_count: 5, sort_order: 4 },
   { id: 5, name: 'Ingredientes Principales', slug: 'ingredientes_principales', description: 'Base de ingredientes para recetas', icon: 'eco', color: '#002b26', item_count: 6, sort_order: 5 },
+  { id: 8, name: 'Mesas', slug: 'mesas', description: 'Mesas y espacios del salon', icon: 'table_restaurant', color: '#006b3f', item_count: 8, sort_order: 6 },
 ];
 
 const EMPTY_GROUP = { name: '', slug: '', description: '', icon: 'category', color: '#543310', sort_order: 0, is_modifier: false, required: false, max_selections: 1 };
