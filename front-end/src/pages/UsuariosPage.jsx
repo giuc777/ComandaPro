@@ -280,7 +280,7 @@ export default function UsuariosPage({ user }) {
 
             {/* MODAL: CREAR USUARIO */}
             {showCreateModal && (
-                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+                <div className="modal-overlay open" onClick={() => setShowCreateModal(false)}>
                     <div className="modal-content max-w-md w-[calc(100vw-2rem)]" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display text-lg text-on-surface font-semibold mb-3">Nuevo Usuario</h3>
                         <form onSubmit={handleCreate} className="flex flex-col gap-3">
@@ -320,7 +320,7 @@ export default function UsuariosPage({ user }) {
 
             {/* MODAL: EDITAR USUARIO */}
             {showEditModal && selectedUser && (
-                <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+                <div className="modal-overlay open" onClick={() => setShowEditModal(false)}>
                     <div className="modal-content max-w-md w-[calc(100vw-2rem)]" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display text-lg text-on-surface font-semibold mb-3">Editar Usuario</h3>
                         <form onSubmit={handleEdit} className="flex flex-col gap-3">
@@ -352,7 +352,7 @@ export default function UsuariosPage({ user }) {
 
             {/* MODAL: CAMBIAR CONTRASEÑA */}
             {showPasswordModal && selectedUser && (
-                <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+                <div className="modal-overlay open" onClick={() => setShowPasswordModal(false)}>
                     <div className="modal-content max-w-md w-[calc(100vw-2rem)]" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display text-lg text-on-surface font-semibold mb-1">Cambiar Contraseña</h3>
                         <p className="text-[0.75rem] text-on-surface-variant mb-3">Usuario: <strong>{selectedUser.name}</strong></p>

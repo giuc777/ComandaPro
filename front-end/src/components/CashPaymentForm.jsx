@@ -18,21 +18,16 @@ export default function CashPaymentForm({ total, onAmountGivenChange }) {
                 <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">
                     Recibido
                 </label>
-                <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-semibold">
-                        Q
-                    </span>
-                    <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={amountGiven}
-                        onChange={e => setAmountGiven(e.target.value)}
-                        placeholder="0.00"
-                        className="input-field pl-8 text-lg font-display"
-                        autoFocus
-                    />
-                </div>
+                <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={amountGiven}
+                    onChange={e => setAmountGiven(e.target.value)}
+                    placeholder="0.00"
+                    className="input-field text-lg font-display"
+                    autoFocus
+                />
             </div>
             <div className="flex justify-between items-center px-1">
                 <span className="text-sm text-on-surface-variant">Cambio:</span>
