@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -284,7 +284,7 @@ export const api = {
     // ========================
 
     getUploadUrl(filename) {
-        return `http://localhost:3000/uploads/products/${filename}`;
+        return `/uploads/products/${filename}`;
     },
 
     async getProducts(categoryId) {

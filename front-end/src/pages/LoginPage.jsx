@@ -56,12 +56,6 @@ export default function LoginPage({ onLogin, error }) {
         setLoading(false);
     };
 
-    const handleDemo = () => {
-        setUsername('mateo');
-        setPassword('barista123');
-        clearErrors();
-    };
-
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-4 py-4 sm:py-6">
             <section className="relative w-full max-w-[400px] mx-auto overflow-hidden bg-primary-container text-on-primary rounded-t-2xl py-5 sm:py-6 px-5 flex flex-col items-center justify-center">
@@ -136,15 +130,6 @@ export default function LoginPage({ onLogin, error }) {
                     >
                         <span className="material-symbols-outlined text-[18px]">login</span>
                         {loading ? 'Iniciando sesion...' : 'Iniciar Sesion'}
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={handleDemo}
-                        className="btn-ghost w-full text-sm justify-center py-1.5"
-                    >
-                        <span className="material-symbols-outlined text-[16px]">science</span>
-                        Usar credenciales de prueba
                     </button>
                 </form>
 
