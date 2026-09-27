@@ -215,9 +215,26 @@ desarrollo.
 
 ## 7. Configurar el backend
 
+Hay 3 plantillas de entorno en `back-end/`. Elige la que corresponda y copiala
+a `.env` (el archivo real nunca se commitea):
+
+| Entorno | Plantilla | Base de datos | Arranque |
+|---------|-----------|---------------|----------|
+| **Produccion** | `.env.example` | `DeerCoffeeDB` (paquete `Deploy/Produccion/`) | `pnpm start` (servicio systemd) |
+| **Test** | `.env.example.test` | `comandapro` (paquete `Deploy/Test/`, datos demo) | `pnpm start` |
+| **Desarrollo** | `.env.example.dev` | `comandapro` (migraciones `database/`) | `pnpm dev` (nodemon) |
+
 ```bash
 cd back-end
+
+# Produccion
 cp .env.example .env
+
+# o Test (datos de prueba)
+cp .env.example.test .env
+
+# o Desarrollo ( impresion en modo dry-run )
+cp .env.example.dev .env
 ```
 
 Edita `back-end/.env`:

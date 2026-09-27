@@ -8,9 +8,11 @@ build/
 .next/
 .nuxt/
 
-# Environment variables
+# Environment variables (los reales NO se commitean; solo las plantillas)
 .env*
 !.env.example
+!.env.example.test
+!.env.example.dev
 
 # Logs
 *.log

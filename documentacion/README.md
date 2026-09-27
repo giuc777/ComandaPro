@@ -1,5 +1,8 @@
 # ComandaPro - Documentación de Desarrollo
 
+> **Manual de usuario:** [ManualDeUsuario.md](ManualDeUsuario.md) — guía
+> práctica del sistema (login, POS, caja, productos, reportes).
+
 ## Índice de Fases
 
 | Fase | Nombre | Estado | Dependencias |
