@@ -6,7 +6,7 @@ function toJSON(data) {
 
 function parseRecipe(raw) {
     if (raw === undefined || raw === null || raw === '') {
-        return { error: 'El producto debe tener al menos un insumo en su receta' };
+        return { recipe: [] };
     }
 
     let parsed;
@@ -16,8 +16,12 @@ function parseRecipe(raw) {
         return { error: 'Receta invalida' };
     }
 
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-        return { error: 'El producto debe tener al menos un insumo en su receta' };
+    if (!Array.isArray(parsed)) {
+        return { error: 'Receta invalida' };
+    }
+
+    if (parsed.length === 0) {
+        return { recipe: [] };
     }
 
     const clean = parsed
@@ -104,10 +108,12 @@ export function createProductController(pool) {
 
                 const productId = Number(result[0].id);
 
-                await conn.query(
-                    'CALL sp_set_product_recipe(?, ?)',
-                    [productId, JSON.stringify(parsed.recipe)]
-                );
+                if (parsed.recipe.length > 0) {
+                    await conn.query(
+                        'CALL sp_set_product_recipe(?, ?)',
+                        [productId, JSON.stringify(parsed.recipe)]
+                    );
+                }
 
                 await conn.commit();
 
@@ -164,10 +170,14 @@ export function createProductController(pool) {
                 );
 
                 if (recipeToSet) {
-                    await conn.query(
-                        'CALL sp_set_product_recipe(?, ?)',
-                        [Number(id), JSON.stringify(recipeToSet)]
-                    );
+                    if (recipeToSet.length > 0) {
+                        await conn.query(
+                            'CALL sp_set_product_recipe(?, ?)',
+                            [Number(id), JSON.stringify(recipeToSet)]
+                        );
+                    } else {
+                        await conn.query('DELETE FROM recipes WHERE product_id = ?', [Number(id)]);
+                    }
                 }
 
                 await conn.commit();

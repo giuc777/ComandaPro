@@ -153,11 +153,6 @@ export default function ProductosPage() {
         unit: r.unit || null
       }));
 
-    if (cleanRecipe.length === 0) {
-      showToast('Agrega al menos un insumo con cantidad mayor a 0', 'error');
-      return;
-    }
-
     const uniqueIds = new Set(cleanRecipe.map(r => r.inventory_id));
     if (uniqueIds.size !== cleanRecipe.length) {
       showToast('No puedes repetir un insumo en la receta', 'error');
@@ -421,18 +416,18 @@ export default function ProductosPage() {
 
               <div className="border-t border-outline-variant/15 pt-3">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs text-on-surface-variant font-semibold uppercase tracking-wider">Receta / Insumos *</label>
+                  <label className="block text-xs text-on-surface-variant font-semibold uppercase tracking-wider">Receta / Insumos (opcional)</label>
                   <button type="button" onClick={addRecipeRow} className="btn-ghost text-[0.6875rem] py-0.5">
                     <span className="material-symbols-outlined text-[14px]">add</span> Agregar insumo
                   </button>
                 </div>
                 <p className="text-[0.625rem] text-on-surface-variant mb-2">
-                  Todo producto requiere insumos (insumo &rarr; receta &rarr; producto).
+                  Opcional. Sin receta el producto se vende igual, pero no descuenta inventario.
                 </p>
 
                 {recipe.length === 0 ? (
-                  <div className="text-[0.75rem] text-error bg-error/5 border border-error/20 rounded-lg px-3 py-2">
-                    Agrega al menos un insumo para guardar el producto.
+                  <div className="text-[0.75rem] text-on-surface-variant bg-surface-container border border-outline-variant/20 rounded-lg px-3 py-2">
+                    Sin insumos: el producto no descontara inventario al venderlo.
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">

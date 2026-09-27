@@ -203,9 +203,9 @@ DELIMITER ;
 -- DEDUCCION DE INVENTARIO (interna, se llama desde el pago)
 -- ============================================
 
--- Deducir inventario al cobrar (OBLIGATORIO)
+-- Deducir inventario al cobrar.
 -- Se llama DENTRO de la transaccion de pago.
--- Si algun producto no tiene receta -> SIGNAL y rollback del cobro.
+-- Si un producto no tiene receta, se omite la deduccion (permite operar sin inventario).
 DROP PROCEDURE IF EXISTS sp_deduct_inventory;
 DELIMITER //
 CREATE PROCEDURE sp_deduct_inventory(IN p_order_id INT)
@@ -226,18 +226,16 @@ BEGIN
             LEAVE read_loop;
         END IF;
 
-        -- Validar que el producto tenga al menos un ingrediente en su receta
+        -- Deducir inventario solo si el producto tiene receta
         SELECT COUNT(*) INTO v_has_recipe FROM recipes WHERE product_id = v_product_id;
-        IF v_has_recipe = 0 THEN
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = 'Producto sin receta: no se puede deducir inventario';
-        END IF;
+        IF v_has_recipe > 0 THEN
 
-        -- Deducir cada ingrediente de la receta
-        UPDATE inventory inv
-        JOIN recipes r ON r.inventory_id = inv.id
-        SET inv.stock = inv.stock - (r.quantity_per_unit * v_quantity)
-        WHERE r.product_id = v_product_id;
+            -- Deducir cada ingrediente de la receta
+            UPDATE inventory inv
+            JOIN recipes r ON r.inventory_id = inv.id
+            SET inv.stock = inv.stock - (r.quantity_per_unit * v_quantity)
+            WHERE r.product_id = v_product_id;
+        END IF;
 
     END LOOP read_loop;
     CLOSE cur;

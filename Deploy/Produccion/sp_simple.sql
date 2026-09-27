@@ -299,17 +299,16 @@ BEGIN
         END IF;
 
         
+        -- Si el producto no tiene receta se omite la deduccion (permite operar sin inventario)
         SELECT COUNT(*) INTO v_has_recipe FROM recipes WHERE product_id = v_product_id;
-        IF v_has_recipe = 0 THEN
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = 'Producto sin receta: no se puede deducir inventario';
-        END IF;
+        IF v_has_recipe > 0 THEN
 
         
-        UPDATE inventory inv
-        JOIN recipes r ON r.inventory_id = inv.id
-        SET inv.stock = inv.stock - (r.quantity_per_unit * v_quantity)
-        WHERE r.product_id = v_product_id;
+            UPDATE inventory inv
+            JOIN recipes r ON r.inventory_id = inv.id
+            SET inv.stock = inv.stock - (r.quantity_per_unit * v_quantity)
+            WHERE r.product_id = v_product_id;
+        END IF;
 
     END LOOP read_loop;
     CLOSE cur;
