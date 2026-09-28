@@ -220,19 +220,28 @@ updateOrderStatus(id, status)      // PATCH /kds/orders/:id/status
 getAdminOrders(status, limit)      // GET  /admin/orders        (FASE 15)
 ```
 
-### Tareas
-- [ ] `kdsController` + `routes/kds.js` + montaje con `requireModule('kds')`
-- [ ] `sendToKitchen` en `orderController` y su ruta
-- [ ] Corrección de permisos de `updateOrder` + revisión de `affected`
-- [ ] Guards de `addOrderItem` / `deleteOrderItem`
-- [ ] `apiClient`: métodos nuevos + manejo de errores en los existentes
+### Tareas — ✅ Sub-fase B completada (2026-09-28)
+- [x] `kdsController` + `routes/kds.js` + montaje con `requireModule('kds')`
+- [x] `sendToKitchen` en `orderController` y su ruta (`POST /:id/send`)
+- [x] Corrección de permisos de `updateOrder` + revisión de `affected` + `updated_by`
+- [x] Guards de `addOrderItem` / `deleteOrderItem` (misma regla, ver `orderLockError`)
+- [x] `adminOrdersController` + `routes/adminOrders.js` + montaje con `adminOnly` (FASE 15)
+- [x] `apiClient`: métodos nuevos + manejo de errores en los existentes
+- [x] `paymentController`: el 409 devuelve `sqlMessage` (antes exponía SQL y parámetros)
 
-### Criterios de aceptación
-- [ ] Barista con `pos` puede editar una orden **pausada** (200) y recibe **409** si está `enviada`
-- [ ] Administrador puede editar una orden `preparando` (200)
-- [ ] Cajero (sin `kds`) recibe **403** en `GET /api/kds/orders`
-- [ ] Transición inválida → **409** con el mensaje del `SIGNAL`
-- [ ] `POST /api/orders/:id/send` sobre una orden `lista` → **409**
+### Criterios de aceptación — ✅ verificados contra el backend local
+- [x] Barista con `pos` puede editar una orden **pausada** (200) y recibe **409** si está `enviada`
+- [x] Administrador puede editar una orden `enviada`/`preparando` (200)
+- [x] Cajero (sin `kds`) recibe **403** en `GET /api/kds/orders`
+- [x] Transición inválida → **409** con el mensaje del `SIGNAL`
+- [x] `POST /api/orders/:id/send` sobre una orden `lista` → **409**
+- [x] Barista recibe **403** en `GET /api/admin/orders` (adminOnly)
+- [x] Administrador editando una orden `pagada` → **409** (FASE 15)
+
+> Prueba ejecutada: 19 escenarios (permisos KDS/admin, flujo `pausada → enviada →
+> preparando → lista`, transiciones inválidas y guards de ítems) sobre
+> `localhost:3000` con `admin/admin123`, `mateo/barista123`, `carlos/barista123`.
+> Órdenes de prueba eliminadas al terminar.
 
 ---
 

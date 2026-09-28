@@ -27,10 +27,17 @@ export function createOrderRouter(orderController, tokenService) {
     );
 
     // Actualizar orden (retomar/editar, replace items)
+    // Permisos: Administrador siempre; demas roles con pos solo en estado pausada
+    // (se validan en el controller, ver orderLockError)
     router.put('/:id',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => orderController.updateOrder(req, res)
+    );
+
+    // Enviar orden a cocina (pausada -> enviada)
+    router.post('/:id/send',
+        authenticate(tokenService),
+        (req, res) => orderController.sendToKitchen(req, res)
     );
 
     // Anular orden
@@ -49,9 +56,9 @@ export function createOrderRouter(orderController, tokenService) {
         (req, res) => orderController.addOrderItem(req, res)
     );
 
+    // Se valida en el controller: Administrador siempre, demas roles solo en pausada
     router.delete('/:id/items/:itemId',
         authenticate(tokenService),
-        adminOnly,
         (req, res) => orderController.deleteOrderItem(req, res)
     );
 

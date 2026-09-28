@@ -38,7 +38,7 @@ export function createPaymentController(pool) {
             } catch (error) {
                 console.error('Error in recordPayment:', error.message);
                 if (error.sqlState === '45000') {
-                    return res.status(409).json({ error: error.message });
+                    return res.status(409).json({ error: error.sqlMessage || error.message });
                 }
                 res.status(500).json({ error: 'Error del servidor' });
             }

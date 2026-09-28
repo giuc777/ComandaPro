@@ -4,6 +4,25 @@ function toJSON(data) {
     ));
 }
 
+async function getOrderStatus(pool, id) {
+    const rows = await pool.query('SELECT status FROM orders WHERE id = ?', [Number(id)]);
+    return rows?.[0]?.status || null;
+}
+
+function orderLockError(req, status) {
+    if (!status) {
+        return { code: 404, error: 'Orden no encontrada' };
+    }
+    if (status === 'pagada' || status === 'anulada') {
+        return { code: 409, error: 'No se puede editar una orden pagada o anulada' };
+    }
+    if (req.user?.role !== 'Administrador' && status !== 'pausada') {
+        return { code: 409, error: 'Solo se pueden editar ordenes pausadas' };
+    }
+    return null;
+}
+
+
 export function createOrderController(pool) {
     return {
 
@@ -101,6 +120,12 @@ export function createOrderController(pool) {
         async addOrderItem(req, res) {
             try {
                 const { id } = req.params;
+                const currentStatus = await getOrderStatus(pool, id);
+                const lock = orderLockError(req, currentStatus);
+                if (lock) {
+                    return res.status(lock.code).json({ error: lock.error });
+                }
+
                 const { product_id, quantity = 1, unit_price, modifiers, modifier_labels, notes } = req.body;
 
                 const [result] = await pool.query(
@@ -120,6 +145,9 @@ export function createOrderController(pool) {
                 res.status(201).json({ item_id: itemId });
             } catch (error) {
                 console.error('Error in addOrderItem:', error.message);
+                if (error.sqlState === '45000') {
+                    return res.status(409).json({ error: error.sqlMessage || error.message });
+                }
                 res.status(500).json({ error: 'Error del servidor' });
             }
         },
@@ -127,11 +155,20 @@ export function createOrderController(pool) {
         async deleteOrderItem(req, res) {
             try {
                 const { id, itemId } = req.params;
+                const currentStatus = await getOrderStatus(pool, id);
+                const lock = orderLockError(req, currentStatus);
+                if (lock) {
+                    return res.status(lock.code).json({ error: lock.error });
+                }
+
                 await pool.query('CALL sp_delete_order_item(?)', [Number(itemId)]);
                 await pool.query('CALL sp_recalculate_order_totals(?)', [Number(id)]);
                 res.json({ success: true });
             } catch (error) {
                 console.error('Error in deleteOrderItem:', error.message);
+                if (error.sqlState === '45000') {
+                    return res.status(409).json({ error: error.sqlMessage || error.message });
+                }
                 res.status(500).json({ error: 'Error del servidor' });
             }
         },
@@ -143,12 +180,28 @@ export function createOrderController(pool) {
 
             let conn;
             try {
+                const currentStatus = await getOrderStatus(pool, id);
+                const lock = orderLockError(req, currentStatus);
+                if (lock) {
+                    return res.status(lock.code).json({ error: lock.error });
+                }
+
                 conn = await pool.getConnection();
                 await conn.beginTransaction();
 
-                await conn.query(
+                const [reopen] = await conn.query(
                     'CALL sp_reopen_order(?, ?, ?, ?, ?)',
                     [Number(id), table_id || null, customer, mode, notes || null]
+                );
+
+                if (Number(reopen[0]?.affected || 0) === 0) {
+                    await conn.rollback();
+                    return res.status(409).json({ error: 'Estado no editable' });
+                }
+
+                await conn.query(
+                    'UPDATE orders SET updated_by = ? WHERE id = ?',
+                    [req.user?.id || null, Number(id)]
                 );
 
                 if (Array.isArray(items)) {
@@ -176,6 +229,9 @@ export function createOrderController(pool) {
             } catch (error) {
                 console.error('Error in updateOrder:', error.message);
                 if (conn) await conn.rollback();
+                if (error.sqlState === '45000') {
+                    return res.status(409).json({ error: error.sqlMessage || error.message });
+                }
                 res.status(500).json({ error: 'Error del servidor' });
             } finally {
                 if (conn) conn.release();
@@ -194,6 +250,25 @@ export function createOrderController(pool) {
                 res.json({ success: true });
             } catch (error) {
                 console.error('Error in voidOrder:', error.message);
+                res.status(500).json({ error: 'Error del servidor' });
+            }
+        },
+
+        async sendToKitchen(req, res) {
+            try {
+                const { id } = req.params;
+                const [rows] = await pool.query('CALL sp_send_to_kitchen(?)', [Number(id)]);
+
+                if (!rows || rows.length === 0) {
+                    return res.status(404).json({ error: 'Orden no encontrada' });
+                }
+
+                res.json(toJSON(rows[0]));
+            } catch (error) {
+                console.error('Error in sendToKitchen:', error.message);
+                if (error.sqlState === '45000') {
+                    return res.status(409).json({ error: error.sqlMessage || error.message });
+                }
                 res.status(500).json({ error: 'Error del servidor' });
             }
         },

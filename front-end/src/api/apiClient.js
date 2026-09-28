@@ -391,14 +391,21 @@ export const api = {
             method: 'PUT',
             body: JSON.stringify(data)
         });
-        return response.json();
+        return readJsonOrThrow(response);
+    },
+
+    async sendToKitchen(id) {
+        const response = await fetchWithAuth(`/orders/${id}/send`, {
+            method: 'POST'
+        });
+        return readJsonOrThrow(response);
     },
 
     async voidOrder(id) {
         const response = await fetchWithAuth(`/orders/${id}`, {
             method: 'DELETE'
         });
-        return response.json();
+        return readJsonOrThrow(response);
     },
 
     async addOrderItem(orderId, data) {
@@ -406,14 +413,50 @@ export const api = {
             method: 'POST',
             body: JSON.stringify(data)
         });
-        return response.json();
+        return readJsonOrThrow(response);
     },
 
     async deleteOrderItem(orderId, itemId) {
         const response = await fetchWithAuth(`/orders/${orderId}/items/${itemId}`, {
             method: 'DELETE'
         });
-        return response.json();
+        return readJsonOrThrow(response);
+    },
+
+    // ========================
+    // KDS (COCINA)
+    // ========================
+
+    async getKitchenOrders(status) {
+        const query = status ? `?status=${encodeURIComponent(status)}` : '';
+        const response = await fetchWithAuth(`/kds/orders${query}`);
+        return readJsonOrThrow(response);
+    },
+
+    async updateOrderStatus(id, status) {
+        const response = await fetchWithAuth(`/kds/orders/${id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status })
+        });
+        return readJsonOrThrow(response);
+    },
+
+    // ========================
+    // ORDENES (ADMINISTRACION)
+    // ========================
+
+    async getAdminOrders(status, limit) {
+        const params = new URLSearchParams();
+        if (status) params.set('status', status);
+        if (limit) params.set('limit', limit);
+        const query = params.toString() ? `?${params.toString()}` : '';
+        const response = await fetchWithAuth(`/admin/orders${query}`);
+        return readJsonOrThrow(response);
+    },
+
+    async getAdminOrder(id) {
+        const response = await fetchWithAuth(`/admin/orders/${id}`);
+        return readJsonOrThrow(response);
     },
 
     // ========================

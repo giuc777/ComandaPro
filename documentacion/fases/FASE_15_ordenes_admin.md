@@ -154,13 +154,13 @@ Manejo de errores: mostrar el `409` del backend (no silenciar).
 - **Sidebar / MobileNav:** nuevo item `Ordenes` (`receipt_long`) con
   `admin: true` (mismo patrón del item *Usuarios*, `Sidebar.jsx:16-18`).
 
-### Tareas
-- [ ] `adminOrdersController` + `routes/adminOrders.js` + montaje en `index.js` con `adminOnly`
-- [ ] Columna `updated_by` en la migración 018
+### Tareas — sub-fase B ✅ (2026-09-28); sub-fase E pendiente
+- [x] `adminOrdersController` + `routes/adminOrders.js` + montaje en `index.js` con `adminOnly`
+- [x] Columna `updated_by` en la migración 018 (se persiste en cada edición)
 - [ ] `OrdenesPage` + `OrderList` + `OrderStatusBadge`
 - [ ] `OrderEditModal` (cabecera + ítems + agregar producto con modificadores)
 - [ ] Ruta y navegación en `App.jsx`, `Sidebar.jsx`, `MobileNav.jsx`
-- [ ] `apiClient`: `getAdminOrders`, `getAdminOrder` + manejo de errores
+- [x] `apiClient`: `getAdminOrders`, `getAdminOrder` + manejo de errores
 
 ### Criterios de aceptación
 - [ ] Un Barista/Cajero que escriba `/ordenes` es redirigido al dashboard
