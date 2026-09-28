@@ -12,7 +12,7 @@
 | [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ✅ Completada | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ✅ Completada | FASE 02, 03 |
-| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System (implementación) | 📋 Plan de implementación (sub-fases A-G) | FASE 04, 06 |
+| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System (implementación) | 🔄 En curso (sub-fases A-C ✅ · D-G pendientes) | FASE 04, 06 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ✅ Completada | FASE 04 |
 | [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ✅ Completada | FASE 02, 04, 06 |
 | [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ✅ Completada | FASE 07 |
@@ -22,7 +22,7 @@
 | [FASE 12](fases/FASE_12_testing_deploy.md) | Testing E2E y Deploy | ⬜ Pendiente | Todas |
 | [FASE 13](fases/FASE_13_impresion_termica.md) | Impresion Termica | ✅ Completada | FASE 06 |
 | [FASE 14](fases/FASE_14_usuarios_permisos.md) | Usuarios, Permisos y Sucursal | ✅ Completada | FASE 01 |
-| [FASE 15](fases/FASE_15_ordenes_admin.md) | Pantalla de Órdenes del Administrador (implementación) | 📋 Plan de implementación | FASE 04, 05 |
+| [FASE 15](fases/FASE_15_ordenes_admin.md) | Pantalla de Órdenes del Administrador (implementación) | 🔄 En curso (sub-fases A-B ✅ · E pendiente) | FASE 04, 05 |
 
 > Para la conexion de la impresora termica, ver [print.md](print.md).
 
@@ -40,9 +40,9 @@ Fase 1 (Auth)
              │
              └──→ Fase 4 (Órdenes POS) ✅
                       │
-                       ├──→ Fase 5 (KDS) 📋 Plan (sub-fases A-G)
+                       ├──→ Fase 5 (KDS) 🔄 A-C ✅ · D-G pendientes
                        │        │
-                       │        └──→ Fase 15 (Órdenes del Admin) 📋 Plan
+                       │        └──→ Fase 15 (Órdenes del Admin) 🔄 A-B ✅ · E pendiente
                        ├──→ Fase 6 (Pagos) ✅
                       │        │
                        │        ├──→ Fase 7 (Inventario + Recetas) ✅
@@ -68,14 +68,20 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > cobrar, ejecutándose dentro de la transacción de pago.
 
 > **Nota (plan de cocina y órdenes):** Fase 5 (KDS) y Fase 15 (Órdenes del
-> Administrador) están **en planificación** — plan por sub-fases A-G en
-> [FASE_05](fases/FASE_05_kds_cocina.md) y
-> [FASE_15](fases/FASE_15_ordenes_admin.md). **Hasta que se implementen el
-> código no cambia**: el POS **no envía órdenes a cocina**, las **pausa**
-> (status `pausada`) con nombre de cliente y mesa y luego se **cobran
-> manualmente** (Fase 6). Ver FASE_04 para el detalle. Al implementarlas el
-> flujo pasa a `pausada → enviada → preparando → lista → completada` y el
-> cobro solo se habilitará en `lista`/`completada`.
+> Administrador) están **en implementación por sub-fases**: A (datos), B (backend) y
+> C (pantalla KDS) ya están aplicadas y verificadas; faltan **D** (POS: enviar a
+> cocina), **E** (pantalla `/ordenes`), **F** (Dashboard y Caja) y **G**
+> (verificación) — ver [FASE_05](fases/FASE_05_kds_cocina.md) y
+> [FASE_15](fases/FASE_15_ordenes_admin.md).
+>
+> **Estado actual del flujo:** la máquina de estados y la regla de cobro **ya están
+> activas en la base de datos**: el cobro solo se permite en `lista`/`completada`
+> (antes era `pausada`), por lo que una orden `pausada` devuelve **409** al cobrarse.
+> Como el POS todavía no tiene el botón **Enviar a Cocina** (sub-fase D), hasta que
+> esa sub-fase esté lista el cobro desde la UI queda bloqueado; para validar ahora se
+> usa `POST /api/orders/:id/send` y que cocina marque la orden como `lista`. El flujo
+> anterior de "pausar y cobrar manualmente" sigue documentado en FASE_04 hasta
+> completar D.
 
 > **Nota (limpieza de catálogos):** Los grupos `menu_cafe` y `proveedores` fueron
 > retirados (soft-delete) por duplicar `products` y `suppliers` respectivamente.

@@ -80,6 +80,16 @@ Cualquier transición no listada → `SIGNAL SQLSTATE '45000'` (el controller re
 Orden de ejecución: **A → B → {C, D, E} → F → G**.
 Las sub-fases C, D, F son de esta fase; **E es FASE 15**.
 
+| Sub-fase | Contenido | Estado |
+|----------|-----------|--------|
+| A | Datos y procedimientos almacenados | ✅ 2026-09-28 |
+| B | Backend (endpoints y permisos) | ✅ 2026-09-28 |
+| C | Pantalla de Cocina (KDS) | ✅ 2026-09-28 |
+| D | POS: enviar a cocina | ⬜ Pendiente |
+| E | Pantalla de órdenes del admin (FASE 15) | ⬜ Pendiente |
+| F | Dashboard y Caja | ⬜ Pendiente |
+| G | Verificación y documentación | ⬜ Pendiente |
+
 ---
 
 ## Sub-fase A — Datos y procedimientos almacenados
@@ -154,15 +164,16 @@ Cada cambio se aplica en **ambos** destinos:
 - [x] `Deploy/{Produccion,Test}/schema.sql` actualizado (instalaciones nuevas)
 - [x] Revisión estática: firmas, `SIGNAL`, FKs, ASCII sin BOM, `DELIMITER` balanceados
 
-> **Pendiente (requiere ejecución en BD):** correr `018_kds_cocina.sql` contra
-> `comandapro` y `DeerCoffeeDB` y re-ejecutarlo para confirmar idempotencia.
+> **Ejecutado (2026-09-28):** `018_kds_cocina.sql` corrió **dos veces** contra
+> `comandapro` sin errores (2.ª pasada = idempotente, 0 filas nuevas). Falta correrlo
+> contra `DeerCoffeeDB` en el despliegue a producción.
 
 ### Criterios de aceptación
 - [x] Las 7 columnas nuevas existen con índice `idx_orders_kds`
 - [x] `sp_update_order_status` rechaza `pausada → preparando` y `lista → preparando`
 - [x] `sp_send_to_kitchen` solo acepta órdenes `pausada` y deja `sent=1` solo a los ítems nuevos
 - [x] `sp_record_payment` rechaza `enviada`/`preparando` y acepta `lista`/`completada`
-- [ ] El archivo compila idempotente (re-ejecutarlo no falla) — **no verificado: sin ejecución de SQL**
+- [x] El archivo compila idempotente (re-ejecutarlo no falla) — verificado en `comandapro`
 
 ---
 
@@ -286,24 +297,47 @@ Clases CSS ya preparadas: `.kds-card` (`front-end/src/index.css:162`).
 - Ruta `/kds` ya protegida con `ProtectedRoute` + `ModuleRoute moduleKey="kds"` (`App.jsx:64`).
 - Sidebar y MobileNav ya enlazan *"Cocina KDS"* → no requieren cambios.
 
-### Tareas
-- [ ] `KdsPage.jsx` real (fetch + filtros + acciones + polling)
-- [ ] Componentes `kds/`
-- [ ] Estados vacíos, error de API (sin romper la pantalla) y `loading`
-- [ ] `pnpm build` + `oxlint`
+### Tareas — ✅ completadas (2026-09-28)
+- [x] `KdsPage.jsx` real (fetch + filtros + acciones + polling)
+- [x] Componentes `kds/`: `KdsCard`, `KdsItemRow`, `KdsStatusBadge`, `KdsFilterChips`
+- [x] Estados vacíos, error de API (banner descartable, sin romper la pantalla) y `loading`
+- [x] `pnpm build` + `oxlint`
 
-### Criterios de aceptación
-- [ ] Las órdenes `enviada`/`preparando`/`lista` aparecen con su temporizador
-- [ ] `Preparar` mueve la tarjeta a *En Preparacion* y marca los ítems (desaparece NUEVO)
-- [ ] Retraso >15 min pinta la tarjeta en rojo
-- [ ] Las órdenes `completada` desaparecen de la vista
-- [ ] Un cambio hecho en otra pestaña se refleja en ≤15 s sin recargar
+> Corrección asociada: `DELETE /api/orders/:id` dejó de ser `adminOnly` y ahora usa
+> `requireModule(pool, 'kds')` (Administrador o rol con módulo `kds`), tal como indica la
+> máquina de estados de esta fase. Sin eso, el botón **Anular** del KDS devolvía **403**
+> para los Baristas. Se verificó: Barista → 200, Cajero (sin `kds`) → 403, Admin → 200.
+
+> Nota de implementación: el temporizador y el estado de retraso se calculan desde
+> `sent_at` con un `setInterval(30000)`; los datos se refrescan cada 15 s y el reloj cada s.
+> `NUEVO` se muestra si `prepared_at IS NULL` y además la orden sigue `enviada` o el ítem
+> todavía no fue enviado (`sent = 0`, caso de un producto agregado por el admin) — así el
+> badge desaparece al pulsar **Preparar**, como exige el criterio, aunque `prepared_at` se
+> marque recién en `lista`.
+
+### Criterios de aceptación — ✅ verificados (2026-09-28)
+- [x] Las órdenes `enviada`/`preparando`/`lista` aparecen con su temporizador
+- [x] `Preparar` mueve la tarjeta a *En Preparacion* y marca los ítems (desaparece NUEVO)
+- [x] Retraso >15 min pinta la tarjeta en rojo
+- [x] Las órdenes `completada` desaparecen de la vista
+- [x] Un cambio hecho en otra pestaña se refleja en ≤15 s sin recargar
+
+> Verificación: contrato de `/api/kds/orders` comprobado contra el backend (crear → enviar →
+> `preparando` → `lista` → `completada` → anular) y render de `KdsPage`/`KdsCard` con
+> `react-dom/server` (21 comprobaciones: título, reloj, chips, tarjeta retrasada con borde
+> rojo e `schedule`, badge `NUEVO`, botones Preparar/Listo y deshabilitado, conteos de chips).
+> El refresco de 15 s corresponde al `setInterval` de `KdsPage`; la persistencia en pantalla
+> se comprobó por código, no con navegador.
 
 ---
 
 ## Sub-fase D — POS: enviar a cocina
 
 **Objetivo:** el mesero envía y monitorea el estado de su orden.
+
+> ⚠️ **Prioridad:** desde la sub-fase A el cobro solo se permite en `lista`/`completada`,
+> por lo que con el POS actual (sin este botón) una orden `pausada` devuelve **409** al
+> cobrarse. Esta sub-fase es la que restablece el flujo completo.
 
 ### D.1 `PosPage.jsx`
 - Botón **"Enviar a Cocina (N ítems)"** (ícono `send`) junto al actual
@@ -410,9 +444,11 @@ LIMIT 20
 | 3 | El cambio de flujo (cobrar solo `lista`/`completada`) rompe el Manual de Usuario actual | Actualizarlo en G |
 | 4 | El rol Cajero no tiene `kds` (semilla) y no verá la cocina | Por diseño; revísalo con el cliente si cocina necesita cajero |
 | 5 | No hay suite de tests activa en el repo (Jest/Playwright sin casos) | Prueba manual en G; FASE 12 sigue pendiente |
-| 6 | `Deploy/Test/seed.sql` está desincronizado con Producción | Pendiente aparte |
-| 7 | FASE 04 y FASE 06 siguen documentando "sin KDS / cobro manual" | Actualizar cuando la fase esté implementada |
+| 6 | `Deploy/Test/seed.sql` no coincide con el de Producción | Decisión del usuario (2026-09-28): se revisó y **se queda como está**; retomarlo después |
+| 7 | FASE 04 y FASE 06 siguen documentando "sin KDS / cobro manual" | Actualizar en G |
 | 8 | `sp_deduct_inventory` / inventario siguen deduciendo **al pagar** | Sin cambio |
+| 9 | Bugs conocidos fuera de alcance: `updateProduct` escribe `image=null` y no hay handler de errores de multer | Pendiente de revisión aparte, cuando se atiendan los bugs |
+| 10 | **Bloqueo transitorio:** el cobro ya exige `lista`/`completada` (activado en A) pero el POS aún no expone **Enviar a Cocina** (sub-fase D) → una orden `pausada` no se puede cobrar desde la UI (409, verificado 2026-09-28) | Ejecutar D como **siguiente paso**; mientras tanto, validar con `POST /api/orders/:id/send` y que cocina marque `lista` |
 
 ---
 
@@ -421,6 +457,6 @@ LIMIT 20
 | Tipo | Archivos |
 |------|----------|
 | SQL | `database/migrations/018_kds_cocina.sql`, `database/procedures/006_order_procedures.sql`, `011_report_procedures.sql`, `Deploy/Produccion/{migrations/018, sp_lectura, sp_transaccionales, sp_simple}.sql`, espejo `Deploy/Test/` |
-| Backend | `orderController.js`, `kdsController.js` (nuevo), `routes/orders.js`, `routes/kds.js` (nuevo), `index.js`, `reportController.js` |
-| Frontend | `KdsPage.jsx`, `components/kds/*` (nuevos), `PosPage.jsx`, `useOrder.js`, `ParkedOrdersPanel.jsx`, `CajaPage.jsx`, `Dashboard.jsx`, `apiClient.js` |
+| Backend | `orderController.js`, `kdsController.js` (nuevo), `adminOrdersController.js` (nuevo, FASE 15), `routes/orders.js`, `routes/kds.js` (nuevo), `routes/adminOrders.js` (nuevo), `index.js`, `reportController.js` |
+| Frontend | `KdsPage.jsx`, `components/kds/*` (nuevos), `utils/format.js`, `PosPage.jsx`, `useOrder.js`, `ParkedOrdersPanel.jsx`, `CajaPage.jsx`, `Dashboard.jsx`, `apiClient.js` |
 | Docs | este archivo, FASE 15, `documentacion/README.md` |

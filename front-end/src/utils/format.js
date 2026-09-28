@@ -25,3 +25,14 @@ export function formatDateLabel(dateStr) {
     const d = new Date(`${dateStr}T00:00:00`);
     return d.toLocaleDateString('es-GT', { day: '2-digit', month: 'short' });
 }
+
+export function minutesSince(dateStr, now = Date.now()) {
+    if (!dateStr) return 0;
+    const started = Date.parse(dateStr);
+    if (Number.isNaN(started)) return 0;
+    return Math.max(0, Math.floor((now - started) / 60000));
+}
+
+export function formatClock(date) {
+    return date.toLocaleTimeString('es-GT', { hour12: false });
+}

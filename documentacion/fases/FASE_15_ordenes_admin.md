@@ -42,6 +42,16 @@ creó ni en qué etapa de cocina estén.
 
 ---
 
+## Sub-fases
+
+| Sub-fase | Contenido | Estado |
+|----------|-----------|--------|
+| A | Compartida con FASE 05 (datos) | ✅ 2026-09-28 |
+| B | Compartida con FASE 05 (backend + `adminOrdersController`) | ✅ 2026-09-28 |
+| E | Frontend `/ordenes` | ⬜ Pendiente |
+
+---
+
 ## Sub-fase A — Compartida con FASE 05 (datos) ✅ (2026-09-28)
 
 Se reutiliza todo lo definido en FASE 05 sub-fase A:
@@ -177,15 +187,15 @@ Manejo de errores: mostrar el `409` del backend (no silenciar).
 
 ## Verificación
 
-- [ ] `node --check` en los controllers/routers nuevos
-- [ ] `pnpm build` + `pnpm exec oxlint` en `front-end` (sin errores nuevos)
-- [ ] Revisión estática de SQL agregado (FKs, ASCII sin BOM)
-- [ ] Prueba manual:
+- [x] `node --check` en los controllers/routers nuevos
+- [x] `pnpm build` + `pnpm exec oxlint` en `front-end` (sin errores nuevos)
+- [x] Revisión estática de SQL agregado (FKs, ASCII sin BOM)
+- [ ] Prueba manual (pendiente de la sub-fase E; los puntos 4 y 5 de la API ya se verificaron contra el backend):
   1. Mesero pausa → envía; admin ve la orden en `/ordenes` con estado `enviada`
   2. Admin edita ítems mientras `preparando`; cocina ve el ítem **NUEVO**
   3. Cocina marca `lista` → admin la ve → la caja la cobra
-  4. Orden `pagada` → botón Editar no disponible / 409
-  5. Usuario no-admin en `/ordenes` → redirigido
+  4. Orden `pagada` → botón Editar no disponible / 409 ✅ (API)
+  5. Usuario no-admin en `/ordenes` → redirigido ✅ (`adminOnly` → 403 en API)
 - [ ] Pasar este documento y FASE 05 a **✅ Completada**
 
 ---

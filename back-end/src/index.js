@@ -97,7 +97,7 @@ app.use('/api/catalogs', createCatalogRouter(catalogController, tokenService));
 app.use('/api/products', authenticate(tokenService), requireModule(config.pool, 'productos', { writeOnly: true }));
 app.use('/api/products', createProductRouter(productController, tokenService, catalogController));
 app.use('/api/orders', authenticate(tokenService), requireModule(config.pool, 'pos', { writeOnly: true }));
-app.use('/api/orders', createOrderRouter(orderController, tokenService));
+app.use('/api/orders', createOrderRouter(orderController, tokenService, config.pool));
 app.use('/api/kds', authenticate(tokenService), requireModule(config.pool, 'kds'));
 app.use('/api/kds', createKdsRouter(kdsController, tokenService));
 app.use('/api/admin/orders', authenticate(tokenService), adminOnly);

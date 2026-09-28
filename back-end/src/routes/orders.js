@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { authenticate, adminOnly } from '../middleware/auth.js';
+import { authenticate, requireModule } from '../middleware/auth.js';
 
-export function createOrderRouter(orderController, tokenService) {
+export function createOrderRouter(orderController, tokenService, pool) {
     const router = Router();
 
     // ========================
@@ -41,9 +41,10 @@ export function createOrderRouter(orderController, tokenService) {
     );
 
     // Anular orden
+    // Permisos: Administrador o rol con modulo kds (FASE 05, maquina de estados)
     router.delete('/:id',
         authenticate(tokenService),
-        adminOnly,
+        requireModule(pool, 'kds'),
         (req, res) => orderController.voidOrder(req, res)
     );
 
