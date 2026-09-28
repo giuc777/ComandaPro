@@ -437,7 +437,7 @@ BEGIN
         customer_name = p_customer_name,
         mode = p_mode,
         notes = p_notes
-    WHERE id = p_order_id AND status = 'pausada';
+    WHERE id = p_order_id AND status NOT IN ('pagada', 'anulada');
     SELECT ROW_COUNT() AS affected;
 END$$
 

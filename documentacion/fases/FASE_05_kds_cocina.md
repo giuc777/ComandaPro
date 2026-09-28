@@ -111,13 +111,23 @@ ALTER TABLE `order_items`
 
 | SP | Firma | Lógica |
 |----|-------|--------|
-| `sp_send_to_kitchen` | `(IN p_order_id INT)` | `SIGNAL` si `status <> 'pausada'`; `UPDATE order_items SET sent=1, sent_at=NOW() WHERE order_id=? AND sent=0`; `UPDATE orders SET status='enviada', sent_at=NOW()`; `SELECT id, status` |
-| `sp_update_order_status` | `(IN p_order_id INT, IN p_status ENUM('enviada','preparando','lista','completada'))` | Valida la transición permitida (tabla anterior). En `preparando` marca `started_at` y `prepared_at` de ítems sin preparar; en `lista` marca `ready_at`; en `completada` marca `completed_at`. `SIGNAL` si el estado actual no permite el cambio |
+| `sp_send_to_kitchen` | `(IN p_order_id INT)` | `SIGNAL` si `status <> 'pausada'` o si la orden no tiene ítems; `UPDATE order_items SET sent=1, sent_at=NOW() WHERE order_id=? AND sent=0`; `UPDATE orders SET status='enviada', sent_at=NOW()`; `SELECT id, status` |
+| `sp_update_order_status` | `(IN p_order_id INT, IN p_status ENUM('enviada','preparando','lista','completada'))` | Valida la transición permitida (tabla anterior). En `preparando` marca `started_at`; en `lista` marca `ready_at` **y** `prepared_at` de los ítems sin preparar; en `completada` marca `completed_at`. `SIGNAL` si el estado actual no permite el cambio. `pausada → enviada` **no** está acá: la hace `sp_send_to_kitchen` |
 | `sp_get_kds_orders` | `(IN p_status VARCHAR(20))` | Una sola consulta **plana** (fila por ítem) de `status IN ('enviada','preparando','lista')` — filtro opcional `p_status` — con `TIMESTAMPDIFF(MINUTE, sent_at, NOW()) AS minutes_waiting`, `table_name`, `customer_name`, `mode`, `created_by_name`, ítem (`product_name`, `quantity`, `modifier_labels`, `notes`, `prepared_at`). `ORDER BY sent_at ASC, oi.id` |
 | `sp_get_orders_admin` | `(IN p_status VARCHAR(20), IN p_limit INT)` | Igual que el anterior pero incluye `pausada` y `completada`, `subtotal/tax/total`, `created_at`; usado por FASE 15 |
 
 > Las filas planas se agrupan por `order_id` en el controller → **1 consulta**
 > para toda la cocina (evita N+1).
+
+> **Notas de implementación (2026-09-28):**
+> - `prepared_at` se marca al pasar a **`lista`** (y no en `preparando`): a nivel
+>   semántico el ítem queda "preparado" cuando termina, no cuando empieza. Solo
+>   se tocan los ítems con `prepared_at IS NULL`.
+> - `sp_send_to_kitchen` además valida que la orden tenga ítems, para que
+>   ninguna orden quede invisible en el KDS.
+> - `sp_get_order` expone también las 4 marcas de tiempo de la cabecera
+>   (`sent_at`, `started_at`, `ready_at`, `completed_at`) y `updated_by`
+>   (requerido por FASE 15).
 
 ### A.3 SP existentes a corregir (punto crítico)
 
@@ -136,19 +146,23 @@ Cada cambio se aplica en **ambos** destinos:
 1. `database/migrations/018_kds_cocina.sql` + `database/procedures/*.sql` → entornos nuevos/dev.
 2. `Deploy/Produccion/migrations/018_kds_cocina.sql` + `Deploy/Produccion/sp_lectura.sql`, `sp_transaccionales.sql`, `sp_simple.sql` → producción (y lo mismo en `Deploy/Test/`).
 
-### Tareas
-- [ ] `018_kds_cocina.sql` (migración idempotente: columnas + índice)
-- [ ] SPs nuevos (4) en `sp_transaccionales.sql` / `sp_lectura.sql`
-- [ ] Correcciones de los 6 SP existentes (A.3)
-- [ ] Espejo en `database/procedures/` y `Deploy/Test/`
-- [ ] Revisión estática: firmas, `SIGNAL`, FKs, ASCII sin BOM
+### Tareas — ✅ Sub-fase A completada (2026-09-28)
+- [x] `018_kds_cocina.sql` (migración idempotente: columnas + índice) — `database/migrations/` y `Deploy/Produccion/migrations/`
+- [x] SPs nuevos (4) en `sp_transaccionales.sql` / `sp_lectura.sql`
+- [x] Correcciones de los 6 SP existentes (A.3)
+- [x] Espejo en `database/procedures/` (006, 007, 011) y `Deploy/Test/`
+- [x] `Deploy/{Produccion,Test}/schema.sql` actualizado (instalaciones nuevas)
+- [x] Revisión estática: firmas, `SIGNAL`, FKs, ASCII sin BOM, `DELIMITER` balanceados
+
+> **Pendiente (requiere ejecución en BD):** correr `018_kds_cocina.sql` contra
+> `comandapro` y `DeerCoffeeDB` y re-ejecutarlo para confirmar idempotencia.
 
 ### Criterios de aceptación
-- [ ] Las 7 columnas nuevas existen con índice `idx_orders_kds`
-- [ ] `sp_update_order_status` rechaza `pausada → preparando` y `lista → preparando`
-- [ ] `sp_send_to_kitchen` solo acepta órdenes `pausada` y deja `sent=1` solo a los ítems nuevos
-- [ ] `sp_record_payment` rechaza `enviada`/`preparando` y acepta `lista`/`completada`
-- [ ] El archivo compila idempotente (re-ejecutarlo no falla)
+- [x] Las 7 columnas nuevas existen con índice `idx_orders_kds`
+- [x] `sp_update_order_status` rechaza `pausada → preparando` y `lista → preparando`
+- [x] `sp_send_to_kitchen` solo acepta órdenes `pausada` y deja `sent=1` solo a los ítems nuevos
+- [x] `sp_record_payment` rechaza `enviada`/`preparando` y acepta `lista`/`completada`
+- [ ] El archivo compila idempotente (re-ejecutarlo no falla) — **no verificado: sin ejecución de SQL**
 
 ---
 

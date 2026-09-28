@@ -1,7 +1,7 @@
 -- ============================================
 -- DeerCoffee / ComandaPro - sp_lectura.sql
 -- Procedimientos de SOLO LECTURA (unicamente consultan datos)
--- Total: 47 procedimientos
+-- Total: 49 procedimientos
 -- ============================================
 USE `comandapro`;
 
@@ -169,7 +169,7 @@ BEGIN
     SELECT
         (SELECT IFNULL(SUM(amount), 0) FROM payments WHERE DATE(created_at) = CURDATE()) AS today_sales,
         (SELECT COUNT(*) FROM payments WHERE DATE(created_at) = CURDATE()) AS today_transactions,
-        (SELECT COUNT(*) FROM orders WHERE status = 'pausada') AS pending_orders,
+        (SELECT COUNT(*) FROM orders WHERE status IN ('pausada','enviada','preparando','lista')) AS pending_orders,
         (SELECT COUNT(*) FROM orders WHERE DATE(created_at) = CURDATE() AND status = 'pagada') AS today_orders,
         (SELECT COUNT(*) FROM inventory WHERE stock <= min_stock) AS low_stock_count,
         (SELECT IFNULL(AVG(amount), 0) FROM payments WHERE DATE(created_at) = CURDATE()) AS avg_ticket;
@@ -206,14 +206,16 @@ BEGIN
     SELECT o.id, o.status, o.table_id, t.name AS table_name,
            o.customer_name, o.mode, o.notes,
            o.subtotal, o.tax, o.total,
-           o.created_by, u.name AS created_by_name, o.parked_at, o.voided_at
+           o.created_by, u.name AS created_by_name, o.parked_at, o.voided_at,
+           o.sent_at, o.started_at, o.ready_at, o.completed_at, o.updated_by
     FROM orders o
     LEFT JOIN tables t ON o.table_id = t.id
     LEFT JOIN users u ON o.created_by = u.id
     WHERE o.id = p_order_id;
 
     SELECT oi.id, oi.product_id, p.name AS product_name, p.image AS product_image,
-           oi.quantity, oi.unit_price, oi.modifiers, oi.modifier_labels, oi.notes
+           oi.quantity, oi.unit_price, oi.modifiers, oi.modifier_labels, oi.notes,
+           oi.sent, oi.sent_at, oi.prepared_at
     FROM order_items oi
     JOIN products p ON oi.product_id = p.id
     WHERE oi.order_id = p_order_id;
@@ -651,6 +653,70 @@ BEGIN
       AND rt.revoked = FALSE
       AND rt.expires_at > NOW()
       AND u.active = TRUE;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_get_kds_orders`$$
+CREATE PROCEDURE `sp_get_kds_orders`(IN p_status VARCHAR(20))
+BEGIN
+    SELECT o.id AS order_id,
+           o.status, o.mode, o.customer_name,
+           t.name AS table_name,
+           u.name AS created_by_name,
+           o.created_at, o.sent_at, o.started_at, o.ready_at,
+           TIMESTAMPDIFF(MINUTE, o.sent_at, NOW()) AS minutes_waiting,
+           oi.id AS item_id,
+           oi.product_id, p.name AS product_name,
+           oi.quantity, oi.modifier_labels, oi.notes,
+           oi.sent, oi.prepared_at
+    FROM orders o
+    JOIN order_items oi ON oi.order_id = o.id
+    JOIN products p ON oi.product_id = p.id
+    LEFT JOIN tables t ON o.table_id = t.id
+    LEFT JOIN users u ON o.created_by = u.id
+    WHERE o.status IN ('enviada', 'preparando', 'lista')
+      AND (p_status IS NULL OR p_status = '' OR o.status = p_status)
+    ORDER BY o.sent_at ASC, oi.id ASC;
+END$$
+
+DROP PROCEDURE IF EXISTS `sp_get_orders_admin`$$
+CREATE PROCEDURE `sp_get_orders_admin`(IN p_status VARCHAR(20), IN p_limit INT)
+BEGIN
+    DECLARE v_limit INT DEFAULT 50;
+
+    IF p_limit IS NOT NULL AND p_limit > 0 THEN
+        SET v_limit = p_limit;
+    END IF;
+
+    SELECT o.id AS order_id,
+           o.status, o.mode, o.customer_name,
+           t.name AS table_name,
+           u.name AS created_by_name,
+           o.subtotal, o.tax, o.total,
+           o.created_at, o.updated_at,
+           o.parked_at, o.sent_at, o.started_at, o.ready_at, o.completed_at,
+           o.voided_at,
+           TIMESTAMPDIFF(MINUTE, o.created_at, NOW()) AS minutes_open,
+           oi.id AS item_id,
+           oi.product_id, p.name AS product_name,
+           oi.quantity, oi.unit_price, oi.modifier_labels, oi.notes,
+           oi.sent, oi.prepared_at
+    FROM (
+        SELECT o2.id
+        FROM orders o2
+        WHERE CASE
+                WHEN p_status IS NULL OR p_status = '' THEN
+                    o2.status IN ('pausada', 'enviada', 'preparando', 'lista', 'completada')
+                ELSE o2.status = p_status
+              END
+        ORDER BY o2.id DESC
+        LIMIT v_limit
+    ) ids
+    JOIN orders o ON o.id = ids.id
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    LEFT JOIN products p ON oi.product_id = p.id
+    LEFT JOIN tables t ON o.table_id = t.id
+    LEFT JOIN users u ON o.created_by = u.id
+    ORDER BY o.id DESC, oi.id ASC;
 END$$
 
 DELIMITER ;

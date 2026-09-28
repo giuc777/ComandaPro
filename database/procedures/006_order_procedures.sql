@@ -61,6 +61,15 @@ CREATE PROCEDURE sp_add_order_item(
     IN p_notes TEXT
 )
 BEGIN
+    DECLARE v_status VARCHAR(20);
+
+    SELECT status INTO v_status FROM orders WHERE id = p_order_id;
+
+    IF v_status IN ('pagada', 'anulada') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No se pueden agregar items a una orden pagada o anulada';
+    END IF;
+
     INSERT INTO order_items (order_id, product_id, quantity, unit_price, modifiers, modifier_labels, notes)
     VALUES (p_order_id, p_product_id, p_quantity, p_unit_price, p_modifiers, p_modifier_labels, p_notes);
     CALL sp_recalculate_order_totals(p_order_id);
@@ -115,14 +124,16 @@ BEGIN
     SELECT o.id, o.status, o.table_id, t.name AS table_name,
            o.customer_name, o.mode, o.notes,
            o.subtotal, o.tax, o.total,
-           o.created_by, u.name AS created_by_name, o.parked_at, o.voided_at
+           o.created_by, u.name AS created_by_name, o.parked_at, o.voided_at,
+           o.sent_at, o.started_at, o.ready_at, o.completed_at, o.updated_by
     FROM orders o
     LEFT JOIN tables t ON o.table_id = t.id
     LEFT JOIN users u ON o.created_by = u.id
     WHERE o.id = p_order_id;
 
     SELECT oi.id, oi.product_id, p.name AS product_name, p.image AS product_image,
-           oi.quantity, oi.unit_price, oi.modifiers, oi.modifier_labels, oi.notes
+           oi.quantity, oi.unit_price, oi.modifiers, oi.modifier_labels, oi.notes,
+           oi.sent, oi.sent_at, oi.prepared_at
     FROM order_items oi
     JOIN products p ON oi.product_id = p.id
     WHERE oi.order_id = p_order_id;
@@ -145,7 +156,7 @@ BEGIN
         customer_name = p_customer_name,
         mode = p_mode,
         notes = p_notes
-    WHERE id = p_order_id AND status = 'pausada';
+    WHERE id = p_order_id AND status NOT IN ('pagada', 'anulada');
     SELECT ROW_COUNT() AS affected;
 END //
 DELIMITER ;
@@ -196,5 +207,124 @@ BEGIN
     LEFT JOIN users u ON o.created_by = u.id
     WHERE o.status = p_status
     ORDER BY o.parked_at ASC, o.created_at DESC;
+END //
+DELIMITER ;
+
+-- ============================================
+-- FASE 05: Transiciones de cocina (KDS)
+-- ============================================
+
+-- Enviar orden a cocina (pausada -> enviada)
+DROP PROCEDURE IF EXISTS sp_send_to_kitchen;
+DELIMITER //
+CREATE PROCEDURE sp_send_to_kitchen(IN p_order_id INT)
+BEGIN
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_items INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    SELECT status INTO v_status FROM orders WHERE id = p_order_id;
+
+    IF v_status IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Orden no encontrada';
+    END IF;
+
+    IF v_status <> 'pausada' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Solo se pueden enviar a cocina ordenes en estado pausada';
+    END IF;
+
+    SELECT COUNT(*) INTO v_items FROM order_items WHERE order_id = p_order_id;
+
+    IF v_items = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'La orden no tiene items para enviar a cocina';
+    END IF;
+
+    UPDATE order_items
+    SET sent = 1, sent_at = CURRENT_TIMESTAMP
+    WHERE order_id = p_order_id AND sent = 0;
+
+    UPDATE orders
+    SET status = 'enviada', sent_at = CURRENT_TIMESTAMP
+    WHERE id = p_order_id;
+
+    COMMIT;
+
+    SELECT id, status, sent_at FROM orders WHERE id = p_order_id;
+END //
+DELIMITER ;
+
+-- Avanzar orden en la cocina (enviada -> preparando -> lista -> completada)
+DROP PROCEDURE IF EXISTS sp_update_order_status;
+DELIMITER //
+CREATE PROCEDURE sp_update_order_status(
+    IN p_order_id INT,
+    IN p_status ENUM('enviada','preparando','lista','completada')
+)
+BEGIN
+    DECLARE v_current VARCHAR(20);
+    DECLARE v_valid TINYINT(1) DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    SELECT status INTO v_current FROM orders WHERE id = p_order_id;
+
+    IF v_current IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Orden no encontrada';
+    END IF;
+
+    IF (v_current = 'enviada' AND p_status = 'preparando')
+    OR (v_current = 'preparando' AND p_status = 'lista')
+    OR (v_current = 'lista' AND p_status = 'completada') THEN
+        SET v_valid = 1;
+    END IF;
+
+    IF v_valid = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Transicion de estado no permitida';
+    END IF;
+
+    IF p_status = 'preparando' THEN
+        UPDATE orders
+        SET status = 'preparando', started_at = CURRENT_TIMESTAMP
+        WHERE id = p_order_id;
+    END IF;
+
+    IF p_status = 'lista' THEN
+        UPDATE orders
+        SET status = 'lista', ready_at = CURRENT_TIMESTAMP
+        WHERE id = p_order_id;
+
+        UPDATE order_items
+        SET prepared_at = CURRENT_TIMESTAMP
+        WHERE order_id = p_order_id AND prepared_at IS NULL;
+    END IF;
+
+    IF p_status = 'completada' THEN
+        UPDATE orders
+        SET status = 'completada', completed_at = CURRENT_TIMESTAMP
+        WHERE id = p_order_id;
+    END IF;
+
+    COMMIT;
+
+    SELECT id, status, sent_at, started_at, ready_at, completed_at
+    FROM orders WHERE id = p_order_id;
 END //
 DELIMITER ;

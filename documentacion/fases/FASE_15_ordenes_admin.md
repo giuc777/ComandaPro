@@ -42,15 +42,15 @@ creó ni en qué etapa de cocina estén.
 
 ---
 
-## Sub-fase A — Compartida con FASE 05 (datos)
+## Sub-fase A — Compartida con FASE 05 (datos) ✅ (2026-09-28)
 
 Se reutiliza todo lo definido en FASE 05 sub-fase A:
 
-- Migración `018_kds_cocina.sql` (columnas de cocina e ítems).
+- Migración `018_kds_cocina.sql` (columnas de cocina, `updated_by` e ítems).
 - `sp_get_orders_admin(IN p_status VARCHAR(20), IN p_limit INT)` — listado para
   esta pantalla (estados activos + `completada`, con totales).
 - `sp_reopen_order` con guard relajado a `status NOT IN ('pagada','anulada')`.
-- `sp_get_order` exponiendo `sent`/`prepared_at`.
+- `sp_get_order` exponiendo `sent`/`prepared_at` y las marcas de tiempo.
 
 ### A.3 Adicional de esta fase
 

@@ -39,9 +39,9 @@ BEGIN
             SET MESSAGE_TEXT = 'Orden no encontrada';
     END IF;
 
-    IF v_status <> 'pausada' THEN
+    IF v_status NOT IN ('lista', 'completada') THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Solo se pueden cobrar ordenes en estado pausada';
+            SET MESSAGE_TEXT = 'Solo se pueden cobrar ordenes listas o completadas';
     END IF;
 
     -- Exigir un turno de caja abierto
