@@ -1,6 +1,6 @@
 # FASE 05 — Kitchen Display System (KDS) (implementación)
 
-**Estado:** 📋 Plan de implementación
+**Estado:** 🟡 En implementación — A-D + H + F.3 ✅ · **E ✅ (2026-09-30, en FASE 15)** · F.1/F.2 y G pendientes
 **Dependencias:** FASE 04 (Órdenes POS), FASE 06 (Pagos y Recibos)
 **Fase complementaria:** [FASE 15 — Pantalla de Órdenes del Administrador](FASE_15_ordenes_admin.md)
 
@@ -86,7 +86,7 @@ Las sub-fases C, D, F son de esta fase; **E es FASE 15**.
 | B | Backend (endpoints y permisos) | ✅ 2026-09-28 |
 | C | Pantalla de Cocina (KDS) | ✅ 2026-09-28 |
 | D | POS: enviar a cocina | ✅ 2026-09-29 |
-| E | Pantalla de órdenes del admin (FASE 15) | ⬜ Pendiente |
+| E | Pantalla de órdenes del admin (FASE 15) | ✅ 2026-09-30 |
 | F | Dashboard y Caja | 🟡 Parcial (F.3 ✅ 2026-09-29) |
 | G | Verificación y documentación | ⬜ Pendiente |
 | H | Agregar ítems a ordenes en curso (POS) | ✅ 2026-09-29 |

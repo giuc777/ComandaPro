@@ -12,7 +12,7 @@
 | [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ✅ Completada | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ✅ Completada | FASE 02, 03 |
-| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System (implementación) | 🔄 En curso (sub-fases A-C ✅ · D-G pendientes) | FASE 04, 06 |
+| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System (implementación) | 🔄 En curso (A-D + H + F.3 ✅ · F.1/F.2 y G pendientes) | FASE 04, 06 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ✅ Completada | FASE 04 |
 | [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ✅ Completada | FASE 02, 04, 06 |
 | [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ✅ Completada | FASE 07 |
@@ -22,7 +22,7 @@
 | [FASE 12](fases/FASE_12_testing_deploy.md) | Testing E2E y Deploy | ⬜ Pendiente | Todas |
 | [FASE 13](fases/FASE_13_impresion_termica.md) | Impresion Termica | ✅ Completada | FASE 06 |
 | [FASE 14](fases/FASE_14_usuarios_permisos.md) | Usuarios, Permisos y Sucursal | ✅ Completada | FASE 01 |
-| [FASE 15](fases/FASE_15_ordenes_admin.md) | Pantalla de Órdenes del Administrador (implementación) | 🔄 En curso (sub-fases A-B ✅ · E pendiente) | FASE 04, 05 |
+| [FASE 15](fases/FASE_15_ordenes_admin.md) | Pantalla de Órdenes del Administrador (implementación) | 🔄 En curso (sub-fases A-B ✅ · E ✅) | FASE 04, 05 |
 
 > Para la conexion de la impresora termica, ver [print.md](print.md).
 
@@ -40,9 +40,9 @@ Fase 1 (Auth)
              │
              └──→ Fase 4 (Órdenes POS) ✅
                       │
-                        ├──→ Fase 5 (KDS) 🔄 A-D + H + F.3 ✅ · E-G pendientes
+                        ├──→ Fase 5 (KDS) 🔄 A-D + H + F.3 ✅ · F.1/F.2 y G pendientes
                        │        │
-                       │        └──→ Fase 15 (Órdenes del Admin) 🔄 A-B ✅ · E pendiente
+                       │        └──→ Fase 15 (Órdenes del Admin) ✅ A-B + E
                        ├──→ Fase 6 (Pagos) ✅
                       │        │
                        │        ├──→ Fase 7 (Inventario + Recetas) ✅
@@ -70,9 +70,9 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > **Nota (plan de cocina y órdenes):** Fase 5 (KDS) y Fase 15 (Órdenes del
 > Administrador) están **en implementación por sub-fases**: A (datos), B (backend),
 > C (pantalla KDS), **D (POS: enviar a cocina)**, **H (agregar ítems a ordenes en
-> curso)** y **F.3 (pantalla de cobro en Caja)** ya están aplicadas y verificadas;
-> faltan **E** (pantalla `/ordenes`), **F.1/F.2** (Dashboard) y **G**
-> (verificación) — ver [FASE_05](fases/FASE_05_kds_cocina.md)
+> curso)**, **F.3 (pantalla de cobro en Caja)** y **E (pantalla `/ordenes` del
+> admin, FASE 15)** ya están aplicadas y verificadas; faltan **F.1/F.2**
+> (Dashboard) y **G** (verificación) — ver [FASE_05](fases/FASE_05_kds_cocina.md)
 > y [FASE_15](fases/FASE_15_ordenes_admin.md).
 >
 > **Estado actual del flujo:** la máquina de estados y la regla de cobro **ya están
@@ -88,7 +88,11 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > `lista`/`completada`, mensajes contextuales en los demás estados (ya no aparece el
 > falso *"Esta orden ya fue cobrada"*), avisa si faltan productos por enviar y permite
 > **Anular**; el guard de anular pasó del módulo `kds` al **`pos`** (así el Cajero
-> también puede anular). Pendiente: **F.1/F.2** (Dashboard) y **G**. El flujo anterior
+> también puede anular). Con **E** el administrador tiene la pantalla **`/ordenes`**:
+> ve todas las órdenes activas + `completada`, las filtra por estado, las refresca
+> cada 15 s y edita cabecera/ítems (los ítems existentes conservan su estado de
+> envío; los nuevos nacen `sent=0` y el KDS los muestra como **NUEVO**). Pendiente:
+> **F.1/F.2** (Dashboard) y **G**. El flujo anterior
 > de "pausar y cobrar manualmente" sigue documentado en FASE_04 hasta F y G.
 
 > **Nota (limpieza de catálogos):** Los grupos `menu_cafe` y `proveedores` fueron

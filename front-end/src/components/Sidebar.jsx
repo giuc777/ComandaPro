@@ -14,6 +14,7 @@ export default function Sidebar({ user, onLogout, hasModule }) {
   ];
 
   const adminItems = [
+    ...(user?.role === 'Administrador' ? [{ to: '/ordenes', icon: 'receipt_long', label: 'Ordenes' }] : []),
     ...(user?.role === 'Administrador' ? [{ to: '/usuarios', icon: 'group', label: 'Usuarios' }] : []),
   ];
 

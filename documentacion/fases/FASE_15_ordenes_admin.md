@@ -1,6 +1,6 @@
 # FASE 15 — Pantalla de Órdenes del Administrador (implementación)
 
-**Estado:** 📋 Plan de implementación
+**Estado:** 🟡 En implementación — sub-fases **A ✅ · B ✅ · E ✅** (2026-09-30)
 **Dependencias:** FASE 04 (Órdenes POS), **[FASE 05 (KDS)](FASE_05_kds_cocina.md)** — reutiliza sus sub-fases A y B
 
 ---
@@ -25,6 +25,10 @@ creó ni en qué etapa de cocina estén.
 - `PUT /api/orders/:id` es `adminOnly` pero el controller **ignora `affected`**,
   y `apiClient.updateOrder` **no revisa `response.ok`** (errores silenciosos).
 
+> Los puntos 3 y 4 ya están corregidos: hoy existe la pantalla `/ordenes`
+> (sub-fase E), `updateOrder` valida estado/permisos con transacción (E.0) y
+> `apiClient` propaga el error.
+
 ---
 
 ## Decisiones de diseño
@@ -33,10 +37,12 @@ creó ni en qué etapa de cocina estén.
 |------|----------|
 | Ubicación | Ruta nueva **`/ordenes`**, visible solo para `Administrador` |
 | Protección | Mismo patrón que `/usuarios`: `<ModuleRoute hasModule={() => user?.role === 'Administrador'} moduleKey="ordenes">` |
-| Edición | **Completa**: mesa, cliente, modo, notas, cantidades, agregar/quitar ítems |
-| Estados editables | Cualquiera **excepto** `pagada` y `anulada` (para cualquier otro estado hace falta ser Administrador) |
+| Edición | **Completa**: mesa, cliente, modo, notas, cantidades, alta/baja de ítems |
+| Estados editables | Cualquiera **excepto** `pagada` y `anulada` (para cualquier otro estado hace falta ser Administrador; no-admin solo en `pausada`) |
+| Sincronización de ítems | **Reconciliación por `item_id`**: conserva `sent`/`sent_at`/`prepared_at` de los existentes; sin `item_id` → INSERT con `sent=0`; ids ausentes del payload → `DELETE` |
 | Recálculo | Los totales los recalcula `sp_recalculate_order_totals` (IVA 12%) en el backend; el front solo muestra |
 | Ítems enviados | Se pueden editar; los ítems nuevos quedan `sent=0` y aparecen como **NUEVO** en el KDS |
+| Filtros del listado | Estados activos + `completada` (**sin filtro "Pagadas"**: solo la caja cobra) |
 | Refresco | Polling **15 s** (misma cadencia que FASE 05) |
 | Auditoría | Se agrega `updated_by` (ver A.3) para saber quién editó |
 
@@ -48,7 +54,8 @@ creó ni en qué etapa de cocina estén.
 |----------|-----------|--------|
 | A | Compartida con FASE 05 (datos) | ✅ 2026-09-28 |
 | B | Compartida con FASE 05 (backend + `adminOrdersController`) | ✅ 2026-09-28 |
-| E | Frontend `/ordenes` | ⬜ Pendiente |
+| E.0 | Backend de edición (reconciliación de ítems + permisos) | ✅ 2026-09-30 |
+| E | Frontend `/ordenes` | ✅ 2026-09-30 |
 
 ---
 
@@ -92,8 +99,11 @@ get   → CALL sp_get_order(?)             // cabecera + ítems
 
 ### B.2 Correcciones heredadas de FASE 05 B.3
 
-1. `updateOrder` revisa `affected === 0` → **409** *"Estado no editable"*.
-2. Regla de permisos: Administrador siempre; rol con `pos` solo en `pausada`.
+1. `updateOrder` valida el estado editable con `SELECT ... FOR UPDATE` → **409**
+   *"Estado no editable"* (no se usa `affected === 0`: `sp_reopen_order` devuelve
+   `ROW_COUNT() = 0` cuando la cabecera no cambia y daría falsos positivos).
+2. Regla de permisos: Administrador siempre; rol con `pos` solo en `pausada`;
+   editar una orden activa **sin** rol Administrador → **403** (E.0).
 3. `apiClient` (`updateOrder`, `deleteOrderItem`, `addOrderItem`) revisa
    `response.ok` y propaga el error.
 4. `updateOrder` persiste `updated_by = req.user.id`.
@@ -107,81 +117,117 @@ getAdminOrder(id)               // GET /admin/orders/:id
 
 ---
 
-## Sub-fase E — Frontend `/ordenes`
+## Sub-fase E.0 — Backend de edición ✅ (2026-09-30)
+
+`back-end/src/controllers/orderController.js`:
+
+- **Validaciones** del `PUT /api/orders/:id`: 400 si un ítem no tiene
+  `product_id`/`unit_price`/`quantity` válidos; **404** si la orden no existe;
+  **409** si está `pagada` o `anulada`; **403** *"Solo un administrador puede
+  editar una orden activa"* si `role !== 'Administrador' && status !== 'pausada'`.
+- **Transacción**: `SELECT ... FOR UPDATE` de la orden (409 si el estado no es
+  editable) → `sp_reopen_order` (si aplica) → `updated_by` →
+  `reconcileOrderItems` → `sp_recalculate_order_totals`.
+- **`reconcileOrderItems`** (reconciliación por `item_id`):
+  | Caso | Acción |
+  |------|--------|
+  | `item_id` existe en la orden | `UPDATE` de `quantity`, `unit_price`, `modifiers`, `modifier_labels`, `notes` — **conserva `sent`, `sent_at` y `prepared_at`** |
+  | Sin `item_id` | `INSERT` con `sent = 0` (aparece como **NUEVO** en el KDS) |
+  | `item_id` del orden que no viene en el payload | `DELETE` |
+- `toDbModifiers` (string JSON pasa tal cual, array → `JSON.stringify`) y
+  `toDbLabels` (array → `join(', ')`).
+- `PUT` con cabecera sola (sin `items`) **no** toca los ítems.
+
+---
+
+## Sub-fase E — Frontend `/ordenes` ✅ (2026-09-30)
 
 ### E.1 Archivos
 
 ```
 front-end/src/
-├── pages/OrdenesPage.jsx                 # listado + filtros + acciones
+├── pages/OrdenesPage.jsx                 # listado + filtros + acciones + modales
 ├── components/orders/
-│   ├── OrderList.jsx                     # tarjetas/filas
-│   ├── OrderStatusBadge.jsx              # pill por estado (compartible con KDS)
+│   ├── OrderList.jsx                     # tarjetas (fila por orden)
+│   ├── OrderStatusBadge.jsx              # pill por estado (compartido con KDS)
 │   └── OrderEditModal.jsx                # modal de edición completa
-└── App.jsx                               # nueva ruta /ordenes
+├── App.jsx                               # nueva ruta /ordenes
+├── components/Sidebar.jsx                # item admin "Ordenes"
+└── components/MobileNav.jsx              # item admin "Ordenes"
 ```
 
 ### E.2 Listado (`OrdenesPage.jsx`)
-- **Filtros por estado** con conteo: `Todas` / `Pausadas` / `Enviadas` /
-  `En Preparacion` / `Listas` / `Completadas` / `Pausadas` (borradores).
-- Polling `setInterval(load, 15000)` limpiado al desmontar.
-- Por tarjeta: `#id`, pill de estado, `Mesa N` o `Para Llevar`, `customer_name`,
-  `N ítems`, `total` (Q), `timeAgo(created_at)`, `created_by_name`.
+- **Filtros por estado** con conteo en cliente: `Todas` / `Pausadas` / `Enviadas` /
+  `En Preparacion` / `Listas` / `Completadas` (sin filtro "Pagadas": la lista
+  usa `sp_get_orders_admin`, que solo devuelve estados activos + `completada`).
+- Polling `setInterval(load, 15000)` limpiado al desmontar; banner de error con
+  botón de descarte (no silencia los 409/403).
+- Por tarjeta (`OrderList.jsx`): `#id`, pill de estado, `Mesa N` o `Para Llevar`,
+  `customer_name`, ítems, `total` (Q), `timeAgo(created_at)` y `created_by_name`.
 - **Acciones:**
   | Acción | Visible si | Endpoint |
   |--------|-----------|----------|
-  | **Editar** | estado no sea `pagada`/`anulada` | abre `OrderEditModal` |
-  | **Ver detalle** | siempre | `GET /admin/orders/:id` |
+  | **Editar** | siempre (el modal queda en solo lectura si está `pagada`/`anulada`) | `GET /admin/orders/:id` → `OrderEditModal` |
+  | **Ver detalle** | siempre | `GET /admin/orders/:id` → `OrderEditModal` (solo lectura si `pagada`/`anulada`) |
   | **Enviar a Cocina** | `pausada` | `POST /orders/:id/send` |
-  | **Anular** | no `pagada`/`anulada` | `DELETE /orders/:id` con `confirm()` |
+  | **Anular** | no `pagada`/`anulada` | `DELETE /orders/:id` con `useConfirm()` |
+- El detalle abre siempre desde `GET /admin/orders/:id` porque el listado no
+  trae `table_id` ni `modifiers`.
 - Estado vacío: *"No hay ordenes en este filtro"*.
+- `data-testid`: `ordenes-page`, `ordenes-filter-<estado>`, `order-card-<id>`,
+  `edit-order-<id>`, `detail-order-<id>`, `send-order-<id>`, `void-order-<id>`.
 
 ### E.3 Modal de edición (`OrderEditModal.jsx`)
 **Cabecera:**
-- `Mesa` (selector de mesas), `Cliente` (`customer_name`), `Modo` (mesa/llevar),
-  `Notas`.
+- `TableSelector` (solo en modo `mesa`), `CustomerNameInput`, `OrderModeToggle`
+  y `textarea` de notas; en solo lectura se muestran como texto.
 
-**Ítems** (fila por ítem):
-- Nombre + modificadores, `unit_price`.
-- Selector de cantidad (`1..N`) y botón **Quitar** (borrado real vía
-  `sp_clear_order_items` + reinserta, o `DELETE /:items/:itemId`).
-- Nota por ítem.
+**Ítems** (fila por ítem): nombre + `modifier_labels` + chip **Enviado/Nuevo**,
+`unit_price` por unidad, selector de cantidad (`1..20`), nota por ítem y botón
+**Quitar** (el backend lo borra por reconciliación).
 
-**Agregar ítem:**
-- Buscador de productos (`GET /api/products`), selector de modificadores
-  (`GET /api/products/:id/modifiers` — mismo componente `ModifierModal` del POS)
-  y cantidad → `POST /api/orders/:id/items` (nace `sent=0`).
+**Agregar ítem:** botón *"Agregar producto"* que muestra `ProductosPos`
+(mismo buscador/categorías/modificadores del POS: `ModifierModal` al confirmar)
+y agrega el producto al estado local con `item_id = null` → al guardar nace
+`sent = 0` en el KDS.
 
-**Totales:** se recalculan en backend; el modal muestra `subtotal / tax / total`
-devueltos por el `GET`.
+**Totales:** `subtotal / tax 12% / total` calculados en el modal como vista
+previa; los definitivos los recalcula `sp_recalculate_order_totals`.
 
-**Guardar** → `PUT /api/orders/:id` con la cabecera + lista completa de ítems.
-Manejo de errores: mostrar el `409` del backend (no silenciar).
+**Guardar** → `PUT /api/orders/:id` con cabecera + lista completa de ítems
+(`item_id` solo si existe). Manejo de errores: el mensaje del backend (409/403/400)
+se muestra en un banner dentro del modal (`data-testid="order-edit-error"`).
+`modifiers` se reenvía tal cual (array nuevo o string existente) y el backend lo
+normaliza.
 
-### E.4 `App.jsx`
-- Ruta `/ordenes` envuelta igual que `/usuarios` (líneas 145-153):
-  `ProtectedRoute` → `ModuleRoute hasModule={() => user?.role === 'Administrador'}`.
-- **Sidebar / MobileNav:** nuevo item `Ordenes` (`receipt_long`) con
-  `admin: true` (mismo patrón del item *Usuarios*, `Sidebar.jsx:16-18`).
+### E.4 Navegación
+- `App.jsx`: ruta `/ordenes` envuelta igual que `/usuarios`:
+  `ProtectedRoute` → `ModuleRoute hasModule={() => user?.role === 'Administrador'} moduleKey="ordenes"`.
+- `Sidebar.jsx`: `adminItems` con `{ to: '/ordenes', icon: 'receipt_long', label: 'Ordenes' }`.
+- `MobileNav.jsx`: se inserta en `splice(6, 0, …)` junto con *Usuarios* (sin
+  mover el índice de *Ajustes*).
 
-### Tareas — sub-fase B ✅ (2026-09-28); sub-fase E pendiente
+### Tareas — sub-fase B ✅ (2026-09-28); sub-fase E ✅ (2026-09-30)
 - [x] `adminOrdersController` + `routes/adminOrders.js` + montaje en `index.js` con `adminOnly`
 - [x] Columna `updated_by` en la migración 018 (se persiste en cada edición)
-- [ ] `OrdenesPage` + `OrderList` + `OrderStatusBadge`
-- [ ] `OrderEditModal` (cabecera + ítems + agregar producto con modificadores)
-- [ ] Ruta y navegación en `App.jsx`, `Sidebar.jsx`, `MobileNav.jsx`
+- [x] E.0 backend: reconciliación de ítems por `item_id` + 403/404/409 + `FOR UPDATE`
+- [x] `OrdenesPage` + `OrderList` + `OrderStatusBadge`
+- [x] `OrderEditModal` (cabecera + ítems + agregar producto con modificadores)
+- [x] Ruta y navegación en `App.jsx`, `Sidebar.jsx`, `MobileNav.jsx`
 - [x] `apiClient`: `getAdminOrders`, `getAdminOrder` + manejo de errores
+- [x] `useOrder.toPayload` envía `item_id` para los ítems existentes
 
 ### Criterios de aceptación
-- [ ] Un Barista/Cajero que escriba `/ordenes` es redirigido al dashboard
-- [ ] El listado muestra órdenes en **todos** los estados activos (no solo `pausada`) y se refresca cada 15 s
-- [ ] El admin puede cambiar la mesa/cliente/notas de una orden en `preparando` y guardar (200)
-- [ ] El admin puede subir la cantidad de un ítem, quitarlo y agregar uno nuevo con modificadores
-- [ ] Los totales se recalculan con IVA 12% tras guardar
-- [ ] Un ítem agregado por el admin aparece en el KDS como **NUEVO**
-- [ ] Editar una orden `pagada` devuelve **409** y el modal lo muestra
-- [ ] El admin recibe **409** si intenta editar una orden que otro usuario cerró
-- [ ] "Anular" con `confirm()` deja la orden en `anulada` y desaparece del listado activo
+- [ ] Un Barista/Cajero que escriba `/ordenes` es redirigido al dashboard (verificación en navegador pendiente)
+- [x] El listado muestra órdenes en **todos** los estados activos (no solo `pausada`) y se refresca cada 15 s *(API `sp_get_orders_admin` con estados mixtos + polling en `OrdenesPage`)*
+- [x] El admin puede cambiar la mesa/cliente/notas de una orden en `preparando` y guardar (200) *(test_e E8)*
+- [x] El admin puede subir la cantidad de un ítem, quitarlo y agregar uno nuevo con modificadores *(test_e + test_e_modal M3–M8)*
+- [x] Los totales se recalculan con IVA 12% tras guardar *(test_e, test_e_modal M11)*
+- [x] Un ítem agregado por el admin aparece en el KDS como **NUEVO** *(test_e_modal M8/M13: `sent=0` y oculto en KDS)*
+- [x] Editar una orden `pagada` devuelve **409** y el modal lo muestra *(test_e E15; banner `order-edit-error`)*
+- [x] El admin recibe **409** si intenta editar una orden que ya no es editable (otro usuario la cobró/anuló) *(test_e E14/E15; guard con `SELECT ... FOR UPDATE`)*
+- [x] "Anular" con confirmación deja la orden en `anulada` y desaparece del listado activo *(test_e E13/E14 + `useConfirm`)*
+- [x] Un usuario no-admin editando una orden activa recibe **403** *(test_e E6; no-admin en `/admin/orders` → E2)*
 
 ---
 
@@ -190,13 +236,19 @@ Manejo de errores: mostrar el `409` del backend (no silenciar).
 - [x] `node --check` en los controllers/routers nuevos
 - [x] `pnpm build` + `pnpm exec oxlint` en `front-end` (sin errores nuevos)
 - [x] Revisión estática de SQL agregado (FKs, ASCII sin BOM)
-- [ ] Prueba manual (pendiente de la sub-fase E; los puntos 4 y 5 de la API ya se verificaron contra el backend):
+- [x] Render SSR de `OrdenesPage` / `OrderList` / `OrderEditModal` (editable y
+      solo lectura) → **8/8**
+- [x] `test_e.ps1` contra el backend local → **20/20** (permisos, 403/409/400,
+      reconciliación, IVA 12%, KDS con `sent=0`, anulación)
+- [x] `test_e_modal.ps1` (payload idéntico al del `OrderEditModal`) → **17/17**
+- [x] BD verificada sin restos de pruebas (solo órdenes reales; 0 ítems huérfanos)
+- [ ] Prueba manual en navegador (pendiente):
   1. Mesero pausa → envía; admin ve la orden en `/ordenes` con estado `enviada`
   2. Admin edita ítems mientras `preparando`; cocina ve el ítem **NUEVO**
   3. Cocina marca `lista` → admin la ve → la caja la cobra
-  4. Orden `pagada` → botón Editar no disponible / 409 ✅ (API)
+  4. Orden `pagada` → botón Editar en solo lectura / 409 ✅ (API)
   5. Usuario no-admin en `/ordenes` → redirigido ✅ (`adminOnly` → 403 en API)
-- [ ] Pasar este documento y FASE 05 a **✅ Completada**
+- [ ] Pasar este documento y FASE 05 a **✅ Completada** (tras F.1/F.2 y G)
 
 ---
 
@@ -205,6 +257,6 @@ Manejo de errores: mostrar el `409` del backend (no silenciar).
 | # | Riesgo | Mitigación |
 |---|--------|------------|
 | 1 | Editar ítems de una orden en cocina puede "engañar" al cocinero | El ítem nuevo queda `sent=0` y el KDS lo resalta como **NUEVO** |
-| 2 | Reemplazar todos los ítems (`sp_clear_order_items` + reinserta) cambia los IDs | Aceptar: los ítems se reinsertan; verificar que no haya `order_items` referenciados por otra tabla (hoy no los hay) |
+| 2 | Editar ítems de una orden en cocina puede "engañar" al cocinero | El ítem nuevo queda `sent=0` y el KDS lo resalta como **NUEVO**; los existentes conservan `sent`/`sent_at` (reconciliación por `item_id`, sin cambiar IDs) |
 | 3 | `DELETE` de ítems no hace *soft-delete* | Registrado como pendiente de auditoría si el cliente lo pide |
 | 4 | Si FASE 05 (A/B) no está aplicada, `/ordenes` no puede agrupar ítems | Dependencia estricta documentada en el encabezado |

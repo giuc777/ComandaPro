@@ -12,7 +12,9 @@ export default function MobileNav({ user, hasModule }) {
   ];
 
   if (user?.role === 'Administrador') {
-    items.splice(6, 0, { to: '/usuarios', icon: 'group', label: 'Usuarios' });
+    items.splice(6, 0,
+      { to: '/ordenes', icon: 'receipt_long', label: 'Ordenes' },
+      { to: '/usuarios', icon: 'group', label: 'Usuarios' });
   }
 
   return (

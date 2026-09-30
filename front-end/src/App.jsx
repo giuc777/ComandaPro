@@ -13,6 +13,7 @@ import CatalogosPage from './pages/CatalogosPage';
 import CatalogoDetallePage from './pages/CatalogoDetallePage';
 import ProductosPage from './pages/ProductosPage';
 import UsuariosPage from './pages/UsuariosPage';
+import OrdenesPage from './pages/OrdenesPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ModuleRoute from './components/ModuleRoute';
 import Layout from './components/Layout';
@@ -146,6 +147,16 @@ function App() {
                             <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
                                 <ModuleRoute hasModule={() => user?.role === 'Administrador'} moduleKey="usuarios">
                                     <UsuariosPage user={user} />
+                                </ModuleRoute>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/ordenes"
+                        element={
+                            <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+                                <ModuleRoute hasModule={() => user?.role === 'Administrador'} moduleKey="ordenes">
+                                    <OrdenesPage />
                                 </ModuleRoute>
                             </ProtectedRoute>
                         }
