@@ -11,6 +11,59 @@ async function getOrderStatus(pool, id) {
 
 const ORDER_STATUSES = ['pausada', 'pagada', 'anulada', 'enviada', 'preparando', 'lista', 'completada'];
 
+function toDbModifiers(value) {
+    if (value === null || value === undefined || value === '') return null;
+    return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function toDbLabels(value) {
+    if (value === null || value === undefined || value === '') return null;
+    return Array.isArray(value) ? value.join(', ') : String(value);
+}
+
+// Sincroniza los items de una orden con el payload del cliente:
+// - item_id existente -> UPDATE (conserva sent, sent_at y prepared_at)
+// - sin item_id       -> INSERT (sent = 0, el KDS lo marca NUEVO)
+// - ausente en payload -> DELETE
+async function reconcileOrderItems(conn, orderId, items) {
+    const existing = await conn.query('SELECT id FROM order_items WHERE order_id = ?', [orderId]);
+    const existingIds = new Set((existing || []).map(row => Number(row.id)));
+    const keepIds = new Set();
+
+    for (const item of items) {
+        const itemId = item.item_id != null ? Number(item.item_id) : null;
+        const values = [
+            Number(item.quantity),
+            Number(item.unit_price),
+            toDbModifiers(item.modifiers),
+            toDbLabels(item.modifier_labels),
+            item.notes || null
+        ];
+
+        if (itemId && existingIds.has(itemId)) {
+            keepIds.add(itemId);
+            await conn.query(
+                `UPDATE order_items SET quantity = ?, unit_price = ?, modifiers = ?, modifier_labels = ?, notes = ?
+                 WHERE id = ? AND order_id = ?`,
+                [...values, itemId, orderId]
+            );
+            continue;
+        }
+
+        const insertResult = await conn.query(
+            `INSERT INTO order_items (order_id, product_id, quantity, unit_price, modifiers, modifier_labels, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [orderId, Number(item.product_id), ...values]
+        );
+        keepIds.add(Number(insertResult.insertId));
+    }
+
+    for (const itemId of existingIds) {
+        if (keepIds.has(itemId)) continue;
+        await conn.query('DELETE FROM order_items WHERE id = ? AND order_id = ?', [itemId, orderId]);
+    }
+}
+
 export function createOrderController(pool) {
     return {
 
@@ -187,6 +240,26 @@ export function createOrderController(pool) {
             const { table_id, customer_name, mode = 'mesa', notes, items } = req.body;
             const customer = (customer_name || '').trim() === '' ? null : customer_name.trim();
 
+            if (Array.isArray(items)) {
+                for (const item of items) {
+                    const productId = Number(item?.product_id);
+                    const unitPrice = Number(item?.unit_price);
+                    const quantity = Number(item?.quantity);
+                    if (!Number.isInteger(productId) || productId <= 0) {
+                        return res.status(400).json({ error: 'Item invalido: product_id requerido' });
+                    }
+                    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+                        return res.status(400).json({ error: 'Item invalido: unit_price invalido' });
+                    }
+                    if (!Number.isInteger(quantity) || quantity < 1) {
+                        return res.status(400).json({ error: 'Item invalido: quantity debe ser mayor a 0' });
+                    }
+                    if (item.item_id != null && !Number.isInteger(Number(item.item_id))) {
+                        return res.status(400).json({ error: 'Item invalido: item_id invalido' });
+                    }
+                }
+            }
+
             let conn;
             try {
                 const currentStatus = await getOrderStatus(pool, id);
@@ -196,22 +269,31 @@ export function createOrderController(pool) {
                 if (currentStatus === 'pagada' || currentStatus === 'anulada') {
                     return res.status(409).json({ error: 'No se puede editar una orden pagada o anulada' });
                 }
-                if (Array.isArray(items) && currentStatus !== 'pausada') {
-                    return res.status(409).json({ error: 'Solo se pueden reemplazar los items de una orden pausada' });
+                if (req.user?.role !== 'Administrador' && currentStatus !== 'pausada') {
+                    return res.status(403).json({ error: 'Solo un administrador puede editar una orden activa' });
                 }
 
                 conn = await pool.getConnection();
                 await conn.beginTransaction();
 
-                const [reopen] = await conn.query(
-                    'CALL sp_reopen_order(?, ?, ?, ?, ?)',
-                    [Number(id), table_id || null, customer, mode, notes || null]
+                const locked = await conn.query(
+                    'SELECT status FROM orders WHERE id = ? FOR UPDATE',
+                    [Number(id)]
                 );
-
-                if (Number(reopen[0]?.affected || 0) === 0) {
+                const lockedStatus = locked?.[0]?.status;
+                if (!lockedStatus) {
+                    await conn.rollback();
+                    return res.status(404).json({ error: 'Orden no encontrada' });
+                }
+                if (lockedStatus === 'pagada' || lockedStatus === 'anulada') {
                     await conn.rollback();
                     return res.status(409).json({ error: 'Estado no editable' });
                 }
+
+                await conn.query(
+                    'CALL sp_reopen_order(?, ?, ?, ?, ?)',
+                    [Number(id), table_id || null, customer, mode, notes || null]
+                );
 
                 await conn.query(
                     'UPDATE orders SET updated_by = ? WHERE id = ?',
@@ -219,22 +301,7 @@ export function createOrderController(pool) {
                 );
 
                 if (Array.isArray(items)) {
-                    await conn.query('CALL sp_clear_order_items(?)', [Number(id)]);
-                    for (const item of items) {
-                        await conn.query(
-                            `INSERT INTO order_items (order_id, product_id, quantity, unit_price, modifiers, modifier_labels, notes)
-                             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                            [
-                                Number(id),
-                                Number(item.product_id),
-                                Number(item.quantity) || 1,
-                                Number(item.unit_price),
-                                item.modifiers ? JSON.stringify(item.modifiers) : null,
-                                item.modifier_labels || null,
-                                item.notes || null
-                            ]
-                        );
-                    }
+                    await reconcileOrderItems(conn, Number(id), items);
                 }
 
                 await conn.query('CALL sp_recalculate_order_totals(?)', [Number(id)]);

@@ -108,6 +108,7 @@ export function useOrder() {
 
     async function saveOrder() {
         const toPayload = i => ({
+            ...(i.id != null ? { item_id: Number(i.id) } : {}),
             product_id: Number(i.product_id),
             quantity: Number(i.quantity),
             unit_price: Number(i.unit_price),

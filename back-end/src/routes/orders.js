@@ -26,8 +26,9 @@ export function createOrderRouter(orderController, tokenService, pool) {
         (req, res) => orderController.getOrder(req, res)
     );
 
-    // Actualizar orden (cabecera siempre; replace items solo en pausada)
-    // Se valida en el controller (orderController.updateOrder)
+    // Actualizar orden: cabecera + items (reconciliacion por item_id).
+    // Permisos y estado se validan en el controller (orderController.updateOrder):
+    // Administrador siempre; otros roles solo en status 'pausada'.
     router.put('/:id',
         authenticate(tokenService),
         (req, res) => orderController.updateOrder(req, res)
