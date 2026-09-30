@@ -1,8 +1,11 @@
-export default function TicketItem({ item, onUpdateQuantity, onRemove, isLast }) {
+export default function TicketItem({ item, onUpdateQuantity, onRemove, isLast, editable = true, allowPersistedEdits = false }) {
     const hasMods = Array.isArray(item.modifiers) && item.modifiers.length > 0;
+    const inKitchen = Boolean(item.sent);
+    const canEditQty = editable && !inKitchen && (allowPersistedEdits || !item.persisted);
+    const canRemove = !inKitchen;
 
     return (
-        <div className={`flex items-center gap-3 py-3 ${isLast ? '' : 'border-b border-outline-variant/10'}`}>
+        <div className={`flex items-center gap-3 py-3 ${isLast ? '' : 'border-b border-outline-variant/10'} ${inKitchen ? 'opacity-60' : ''}`}>
             <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
@@ -23,34 +26,57 @@ export default function TicketItem({ item, onUpdateQuantity, onRemove, isLast })
                 )}
             </div>
 
-            <div className="flex items-center gap-1">
-                <button
-                    onClick={() => onUpdateQuantity(item.tempId, item.quantity - 1)}
-                    className="w-7 h-7 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface text-sm font-bold flex items-center justify-center"
-                    data-testid="qty-minus"
-                    type="button"
+            {inKitchen ? (
+                <span
+                    className="inline-flex items-center gap-1 text-[0.625rem] font-bold text-secondary whitespace-nowrap"
+                    data-testid="item-in-kitchen"
                 >
-                    −
-                </button>
-                <span className="w-8 text-center text-sm font-semibold text-on-surface">{item.quantity}</span>
-                <button
-                    onClick={() => onUpdateQuantity(item.tempId, item.quantity + 1)}
-                    className="w-7 h-7 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface text-sm font-bold flex items-center justify-center"
-                    data-testid="qty-plus"
-                    type="button"
-                >
-                    +
-                </button>
-            </div>
+                    <span className="material-symbols-outlined text-[14px]">check_circle</span> EN COCINA
+                </span>
+            ) : (
+                <>
+                    {canEditQty ? (
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => onUpdateQuantity(item.tempId, item.quantity - 1)}
+                                className="w-7 h-7 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface text-sm font-bold flex items-center justify-center disabled:opacity-40"
+                                data-testid="qty-minus"
+                                type="button"
+                            >
+                                −
+                            </button>
+                            <span className="w-8 text-center text-sm font-semibold text-on-surface">{item.quantity}</span>
+                            <button
+                                onClick={() => onUpdateQuantity(item.tempId, item.quantity + 1)}
+                                className="w-7 h-7 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface text-sm font-bold flex items-center justify-center disabled:opacity-40"
+                                data-testid="qty-plus"
+                                type="button"
+                            >
+                                +
+                            </button>
+                        </div>
+                    ) : (
+                        <span
+                            className="w-10 text-center text-sm font-semibold text-on-surface-variant"
+                            data-testid="item-locked-qty"
+                        >
+                            {item.quantity} ×
+                        </span>
+                    )}
 
-            <button
-                onClick={() => onRemove(item.tempId)}
-                className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-error transition-colors"
-                data-testid="remove-item"
-                title="Eliminar"
-            >
-                <span className="material-symbols-outlined text-[18px]">delete</span>
-            </button>
+                    {canRemove && (
+                        <button
+                            onClick={() => onRemove(item.tempId)}
+                            className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-error transition-colors"
+                            data-testid="remove-item"
+                            title="Eliminar"
+                            type="button"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                    )}
+                </>
+            )}
         </div>
     );
 }

@@ -26,25 +26,26 @@ export function createOrderRouter(orderController, tokenService, pool) {
         (req, res) => orderController.getOrder(req, res)
     );
 
-    // Actualizar orden (retomar/editar, replace items)
-    // Permisos: Administrador siempre; demas roles con pos solo en estado pausada
-    // (se validan en el controller, ver orderLockError)
+    // Actualizar orden (cabecera siempre; replace items solo en pausada)
+    // Se valida en el controller (orderController.updateOrder)
     router.put('/:id',
         authenticate(tokenService),
         (req, res) => orderController.updateOrder(req, res)
     );
 
-    // Enviar orden a cocina (pausada -> enviada)
+    // Enviar a cocina: pausada/enviada/preparando/lista/completada
+    // (solo marca los items con sent = 0)
     router.post('/:id/send',
         authenticate(tokenService),
         (req, res) => orderController.sendToKitchen(req, res)
     );
 
     // Anular orden
-    // Permisos: Administrador o rol con modulo kds (FASE 05, maquina de estados)
+    // Permisos: Administrador o rol con modulo pos (se anula desde el POS/Caja/KDS;
+    // la pantalla /kds conserva su propio guard con modulo kds)
     router.delete('/:id',
         authenticate(tokenService),
-        requireModule(pool, 'kds'),
+        requireModule(pool, 'pos'),
         (req, res) => orderController.voidOrder(req, res)
     );
 
@@ -57,7 +58,7 @@ export function createOrderRouter(orderController, tokenService, pool) {
         (req, res) => orderController.addOrderItem(req, res)
     );
 
-    // Se valida en el controller: Administrador siempre, demas roles solo en pausada
+    // Se valida en el controller: item solo si sent = 0 y orden no pagada/anulada
     router.delete('/:id/items/:itemId',
         authenticate(tokenService),
         (req, res) => orderController.deleteOrderItem(req, res)

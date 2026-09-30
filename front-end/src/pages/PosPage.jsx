@@ -12,7 +12,7 @@ import ParkedOrdersPanel from '../components/ParkedOrdersPanel';
 
 export default function PosPage() {
     const navigate = useNavigate();
-    const { order, addItem, updateQuantity, removeItem, setTable, setCustomerName, setMode, setNotes, loadOrder, reset, computeTotals, hasItems, saveOrder } = useOrder();
+    const { order, addItem, updateQuantity, removeItem, setTable, setCustomerName, setMode, setNotes, loadOrder, reset, computeTotals, hasItems, saveOrder, sendToKitchen } = useOrder();
     const { confirm, confirmModal } = useConfirm();
 
     const [tables, setTables] = useState([]);
@@ -21,6 +21,13 @@ export default function PosPage() {
     const [actionBusy, setActionBusy] = useState(false);
     const [refreshParked, setRefreshParked] = useState(0);
     const tableSelectorRef = useRef(null);
+
+    const canReplace = !order.orderId || !order.status || order.status === 'pausada';
+    const isAppendMode = Boolean(order.orderId) && Boolean(order.status) && order.status !== 'pausada';
+    const canAdd = !order.orderId || !['pagada', 'anulada'].includes(order.status);
+    const pendingCount = order.items.filter(i => !i.sent).length;
+    const localCount = order.items.filter(i => !i.persisted).length;
+    const canEdit = canReplace;
 
     useEffect(() => {
         async function loadTables() {
@@ -40,10 +47,38 @@ export default function PosPage() {
     }
 
     function handleAddProduct(product, modifiers, modifierLabels, finalPrice) {
+        if (!canAdd) {
+            showTemp('La orden ya esta pagada y no se puede editar aqui', 'error');
+            return;
+        }
         addItem(product, modifiers, modifierLabels, finalPrice);
     }
 
+    function handleRemoveItem(tempId) {
+        const item = order.items.find(i => i.tempId === tempId);
+        if (!item) return;
+        if (!item.persisted || !order.orderId) {
+            removeItem(tempId);
+            return;
+        }
+        (async () => {
+            try {
+                await api.deleteOrderItem(order.orderId, item.id);
+                const full = await api.getOrder(order.orderId);
+                loadOrder(full);
+                showTemp('Producto eliminado', 'success');
+                setRefreshParked(r => r + 1);
+            } catch (err) {
+                showTemp(err.message || 'No se pudo eliminar el producto', 'error');
+            }
+        })();
+    }
+
     async function handlePark() {
+        if (isAppendMode) {
+            await handleSaveAppend();
+            return;
+        }
         if (!hasItems) {
             showTemp('Agrega productos al ticket primero', 'error');
             return;
@@ -68,12 +103,34 @@ export default function PosPage() {
         }
     }
 
+    async function handleSaveAppend() {
+        if (localCount === 0) {
+            showTemp('No hay productos nuevos para guardar', 'error');
+            return;
+        }
+        setActionBusy(true);
+        try {
+            const res = await saveOrder();
+            if (res.error) throw new Error(res.error);
+            showTemp(`${res.added} producto(s) agregado(s) a la orden #${order.orderId}`, 'success');
+            setRefreshParked(r => r + 1);
+        } catch (err) {
+            showTemp(err.message || 'Error al guardar', 'error');
+        } finally {
+            setActionBusy(false);
+        }
+    }
+
     async function handleRetomar(parkedOrder) {
         setActionBusy(true);
         try {
             const full = await api.getOrder(parkedOrder.id);
             loadOrder(full);
-            showTemp(`Orden #${parkedOrder.id} cargada`, 'success');
+            if (full.status && full.status !== 'pausada') {
+                showTemp(`Orden #${parkedOrder.id} lista para agregar productos`, 'success');
+            } else {
+                showTemp(`Orden #${parkedOrder.id} cargada`, 'success');
+            }
         } catch {
             showTemp('Error al cargar orden', 'error');
         } finally {
@@ -96,8 +153,8 @@ export default function PosPage() {
             if (res.error) throw new Error(res.error);
             showTemp(`Orden #${parkedOrder.id} anulada`, 'success');
             setRefreshParked(r => r + 1);
-        } catch {
-            showTemp('Error al anular', 'error');
+        } catch (err) {
+            showTemp(err.message || 'Error al anular', 'error');
         } finally {
             setActionBusy(false);
         }
@@ -105,6 +162,54 @@ export default function PosPage() {
 
     function handleCobrar(parkedOrder) {
         navigate(`/caja?order=${parkedOrder.id}`);
+    }
+
+    async function handleSendCurrent() {
+        if (!hasItems) {
+            showTemp('Agrega productos al ticket primero', 'error');
+            return;
+        }
+        if (!canAdd) {
+            showTemp('Esta orden ya fue pagada', 'error');
+            return;
+        }
+        if (!isAppendMode && !order.customerName.trim() && !order.tableId) {
+            showTemp('Ingresa nombre de cliente o selecciona mesa', 'error');
+            return;
+        }
+
+        setActionBusy(true);
+        try {
+            let orderId = order.orderId;
+            if (!orderId || localCount > 0) {
+                const res = await saveOrder();
+                if (res.error) throw new Error(res.error);
+                orderId = res.order_id || orderId;
+                if (!orderId) throw new Error('No se pudo guardar la orden');
+                const full = await api.getOrder(orderId);
+                loadOrder(full);
+            }
+            await sendToKitchen(orderId);
+            showTemp('Orden enviada a cocina', 'success');
+            setRefreshParked(r => r + 1);
+        } catch (err) {
+            showTemp(err.message || 'Error al enviar a cocina', 'error');
+        } finally {
+            setActionBusy(false);
+        }
+    }
+
+    async function handleSendParked(parkedOrder) {
+        setActionBusy(true);
+        try {
+            await api.sendToKitchen(parkedOrder.id);
+            showTemp(`Orden #${parkedOrder.id} enviada a cocina`, 'success');
+            setRefreshParked(r => r + 1);
+        } catch (err) {
+            showTemp(err.message || 'Error al enviar a cocina', 'error');
+        } finally {
+            setActionBusy(false);
+        }
     }
 
     const totals = computeTotals();
@@ -137,32 +242,46 @@ export default function PosPage() {
                             </span>
                         </div>
                     </div>
-                    <OrderModeToggle mode={order.mode} onChange={setMode} />
+                    {canEdit && <OrderModeToggle mode={order.mode} onChange={setMode} />}
                 </div>
             </header>
 
             {/* Control bar */}
-            <div className="px-4 md:px-6 py-3 bg-surface-container-lowest border-b border-outline-variant/10 flex items-center gap-3 flex-wrap">
-                <div ref={tableSelectorRef}>
-                    <TableSelector
-                        tables={tables}
-                        selectedId={order.tableId}
-                        onSelect={(t) => setTable(t.id, t.name)}
-                        onClose={() => {}}
+            {canEdit ? (
+                <div className="px-4 md:px-6 py-3 bg-surface-container-lowest border-b border-outline-variant/10 flex items-center gap-3 flex-wrap">
+                    <div ref={tableSelectorRef}>
+                        <TableSelector
+                            tables={tables}
+                            selectedId={order.tableId}
+                            onSelect={(t) => setTable(t.id, t.name)}
+                            onClose={() => {}}
+                        />
+                    </div>
+                    <div className="w-64">
+                        <CustomerNameInput value={order.customerName} onChange={setCustomerName} />
+                    </div>
+                    <input
+                        type="text"
+                        value={order.notes}
+                        onChange={e => setNotes(e.target.value)}
+                        className="input-field w-48"
+                        placeholder="Notas..."
+                        data-testid="order-notes"
                     />
                 </div>
-                <div className="w-64">
-                    <CustomerNameInput value={order.customerName} onChange={setCustomerName} />
+            ) : (
+                <div
+                    className="px-4 md:px-6 py-3 bg-surface-container-lowest border-b border-outline-variant/10 flex items-center gap-2 text-[0.8125rem] text-on-surface-variant"
+                    data-testid="order-readonly-notice"
+                >
+                    <span className="material-symbols-outlined text-[16px] text-secondary">restaurant</span>
+                    <span>
+                        Orden en cocina: la mesa, el cliente y las notas se bloquean. Puedes{' '}
+                        <strong className="text-on-surface">agregar productos nuevos</strong> y enviarlos a cocina desde el
+                        ticket.
+                    </span>
                 </div>
-                <input
-                    type="text"
-                    value={order.notes}
-                    onChange={e => setNotes(e.target.value)}
-                    className="input-field w-48"
-                    placeholder="Notas..."
-                    data-testid="order-notes"
-                />
-            </div>
+            )}
 
             {/* Main content */}
             <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6 flex flex-col lg:flex-row gap-4">
@@ -178,24 +297,63 @@ export default function PosPage() {
                     <Ticket
                         items={order.items}
                         onUpdateQuantity={updateQuantity}
-                        onRemove={removeItem}
+                        onRemove={handleRemoveItem}
                         totals={totals}
+                        status={order.status}
+                        editable={canAdd}
+                        allowPersistedEdits={canReplace}
                     />
 
-                    <button
-                        onClick={handlePark}
-                        disabled={!hasItems || actionBusy}
-                        className="btn-primary w-full text-[0.75rem] py-2 disabled:opacity-50"
-                        data-testid="park-order"
-                    >
-                        <span className="material-symbols-outlined text-[16px]">{actionBusy ? 'hourglass_empty' : 'pause_circle'}</span>
-                        Pausar Orden
-                    </button>
+                    {(pendingCount > 0 || canReplace || (isAppendMode && localCount > 0)) && (
+                        <div className="flex gap-2">
+                            {pendingCount > 0 && (
+                                <button
+                                    onClick={handleSendCurrent}
+                                    disabled={!hasItems || actionBusy}
+                                    className="btn-primary flex-1 text-[0.75rem] py-2 disabled:opacity-50"
+                                    data-testid="send-kitchen"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">
+                                        {actionBusy ? 'hourglass_empty' : 'send'}
+                                    </span>
+                                    Enviar a Cocina ({pendingCount})
+                                </button>
+                            )}
+                            {canReplace && (
+                                <button
+                                    onClick={handlePark}
+                                    disabled={!hasItems || actionBusy}
+                                    className={`${pendingCount > 0 ? 'btn-ghost flex-1' : 'btn-primary w-full'} text-[0.75rem] py-2 disabled:opacity-50`}
+                                    data-testid="park-order"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">
+                                        {actionBusy ? 'hourglass_empty' : 'pause_circle'}
+                                    </span>
+                                    Pausar Orden
+                                </button>
+                            )}
+                            {isAppendMode && localCount > 0 && (
+                                <button
+                                    onClick={handleSaveAppend}
+                                    disabled={actionBusy}
+                                    className="btn-ghost flex-1 text-[0.75rem] py-2 disabled:opacity-50"
+                                    data-testid="save-append"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">
+                                        {actionBusy ? 'hourglass_empty' : 'save'}
+                                    </span>
+                                    Guardar
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     <ParkedOrdersPanel
                         onRetomar={handleRetomar}
                         onCobrar={handleCobrar}
                         onAnular={handleAnular}
+                        onSend={handleSendParked}
+                        onAppend={handleRetomar}
                         refreshTrigger={refreshParked}
                     />
                 </div>

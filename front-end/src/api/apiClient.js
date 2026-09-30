@@ -373,6 +373,11 @@ export const api = {
         return response.json();
     },
 
+    async getActiveOrders() {
+        const response = await fetchWithAuth('/orders?status=pausada,enviada,preparando,lista,completada');
+        return response.json();
+    },
+
     async getOrder(id) {
         const response = await fetchWithAuth(`/orders/${id}`);
         return response.json();

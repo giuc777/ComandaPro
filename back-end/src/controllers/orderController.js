@@ -9,19 +9,7 @@ async function getOrderStatus(pool, id) {
     return rows?.[0]?.status || null;
 }
 
-function orderLockError(req, status) {
-    if (!status) {
-        return { code: 404, error: 'Orden no encontrada' };
-    }
-    if (status === 'pagada' || status === 'anulada') {
-        return { code: 409, error: 'No se puede editar una orden pagada o anulada' };
-    }
-    if (req.user?.role !== 'Administrador' && status !== 'pausada') {
-        return { code: 409, error: 'Solo se pueden editar ordenes pausadas' };
-    }
-    return null;
-}
-
+const ORDER_STATUSES = ['pausada', 'pagada', 'anulada', 'enviada', 'preparando', 'lista', 'completada'];
 
 export function createOrderController(pool) {
     return {
@@ -82,11 +70,23 @@ export function createOrderController(pool) {
         async listOrders(req, res) {
             try {
                 const status = req.query.status || 'pausada';
-                let result;
-                if (status === 'pausada') {
+                const statuses = String(status)
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => ORDER_STATUSES.includes(s));
+
+                if (statuses.length === 0) {
+                    return res.status(400).json({ error: 'status invalido' });
+                }
+
+                let result = [];
+                if (statuses.length === 1 && statuses[0] === 'pausada') {
                     [result] = await pool.query('CALL sp_list_parked_orders()');
                 } else {
-                    [result] = await pool.query('CALL sp_list_orders_by_status(?)', [status]);
+                    for (const item of statuses) {
+                        const [rows] = await pool.query('CALL sp_list_orders_by_status(?)', [item]);
+                        result.push(...rows);
+                    }
                 }
                 res.json(toJSON(result));
             } catch (error) {
@@ -120,11 +120,6 @@ export function createOrderController(pool) {
         async addOrderItem(req, res) {
             try {
                 const { id } = req.params;
-                const currentStatus = await getOrderStatus(pool, id);
-                const lock = orderLockError(req, currentStatus);
-                if (lock) {
-                    return res.status(lock.code).json({ error: lock.error });
-                }
 
                 const { product_id, quantity = 1, unit_price, modifiers, modifier_labels, notes } = req.body;
 
@@ -155,10 +150,24 @@ export function createOrderController(pool) {
         async deleteOrderItem(req, res) {
             try {
                 const { id, itemId } = req.params;
-                const currentStatus = await getOrderStatus(pool, id);
-                const lock = orderLockError(req, currentStatus);
-                if (lock) {
-                    return res.status(lock.code).json({ error: lock.error });
+                const rows = await pool.query(
+                    `SELECT oi.id, oi.sent, o.status
+                     FROM order_items oi
+                     JOIN orders o ON o.id = oi.order_id
+                     WHERE oi.id = ? AND oi.order_id = ?`,
+                    [Number(itemId), Number(id)]
+                );
+
+                if (!rows || rows.length === 0) {
+                    return res.status(404).json({ error: 'Item no encontrado' });
+                }
+
+                const item = rows[0];
+                if (item.status === 'pagada' || item.status === 'anulada') {
+                    return res.status(409).json({ error: 'No se pueden editar items de una orden pagada o anulada' });
+                }
+                if (Number(item.sent) === 1) {
+                    return res.status(409).json({ error: 'El item ya fue enviado a cocina y no se puede eliminar' });
                 }
 
                 await pool.query('CALL sp_delete_order_item(?)', [Number(itemId)]);
@@ -181,9 +190,14 @@ export function createOrderController(pool) {
             let conn;
             try {
                 const currentStatus = await getOrderStatus(pool, id);
-                const lock = orderLockError(req, currentStatus);
-                if (lock) {
-                    return res.status(lock.code).json({ error: lock.error });
+                if (!currentStatus) {
+                    return res.status(404).json({ error: 'Orden no encontrada' });
+                }
+                if (currentStatus === 'pagada' || currentStatus === 'anulada') {
+                    return res.status(409).json({ error: 'No se puede editar una orden pagada o anulada' });
+                }
+                if (Array.isArray(items) && currentStatus !== 'pausada') {
+                    return res.status(409).json({ error: 'Solo se pueden reemplazar los items de una orden pausada' });
                 }
 
                 conn = await pool.getConnection();

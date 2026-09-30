@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/apiClient';
+import { useConfirm } from '../hooks/useConfirm';
 import PaymentMethodSelector from '../components/PaymentMethodSelector';
 import CashPaymentForm from '../components/CashPaymentForm';
 import ReceiptModal from '../components/ReceiptModal';
@@ -472,6 +473,7 @@ function PaymentView({ orderId, navigate }) {
     const [processing, setProcessing] = useState(false);
     const [receipt, setReceipt] = useState(null);
     const [shift, setShift] = useState(null);
+    const { confirm, confirmModal } = useConfirm();
 
     useEffect(() => {
         Promise.all([
@@ -491,7 +493,10 @@ function PaymentView({ orderId, navigate }) {
         ? Number(order?.total || 0)
         : Number(order?.subtotal || 0);
     const change = Math.max(0, amountGiven - amountDue);
-    const canPay = order && order.status === 'pausada' && shift && !processing &&
+    const paidStatus = order && (order.status === 'pagada' || order.status === 'anulada');
+    const payableStatus = order && (order.status === 'lista' || order.status === 'completada');
+    const pendingCount = (order?.items || []).filter(i => Number(i.sent) !== 1).length;
+    const canPay = payableStatus && pendingCount === 0 && shift && !processing &&
         (method !== 'efectivo' || amountGiven >= amountDue);
 
     const handlePay = useCallback(async () => {
@@ -526,6 +531,26 @@ function PaymentView({ orderId, navigate }) {
             setProcessing(false);
         }
     }, [canPay, orderId, method, amountGiven, order, applyTax]);
+
+    const handleVoid = useCallback(async () => {
+        const ok = await confirm({
+            title: 'Anular orden',
+            message: `¿Seguro que deseas anular la orden #${orderId}? Esta acción no se puede deshacer.`,
+            confirmLabel: 'Anular orden',
+            variant: 'danger',
+            icon: 'block',
+        });
+        if (!ok) return;
+        setProcessing(true);
+        try {
+            await api.voidOrder(orderId);
+            navigate('/pos');
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setProcessing(false);
+        }
+    }, [confirm, orderId, navigate]);
 
     const handleReceiptClose = () => {
         setReceipt(null);
@@ -567,120 +592,92 @@ function PaymentView({ orderId, navigate }) {
                     </div>
                 )}
 
-                {order && !loading && !error && (
+                {order && !loading && (
                     <>
-                        {order.status !== 'pausada' && (
-                            <div className="bg-tertiary-container/20 border border-tertiary/30 rounded-xl p-4 text-center">
-                                <span className="material-symbols-outlined text-tertiary text-[28px]">check_circle</span>
-                                <p className="text-tertiary font-semibold mt-1">Esta orden ya fue cobrada</p>
-                                <button onClick={() => navigate('/pos')} className="btn-secondary mt-3 text-sm">
-                                    Volver al POS
-                                </button>
-                            </div>
+                        {paidStatus && (
+                            <OrderPaidNotice status={order.status} onBack={() => navigate('/pos')} />
                         )}
 
-                        {order.status === 'pausada' && (
+                        {!paidStatus && (
                             <>
-                                {!shift && (
-                                    <div className="bg-tertiary-container/20 border border-tertiary/40 rounded-xl p-4">
-                                        <div className="flex items-start gap-3">
-                                            <span className="material-symbols-outlined text-tertiary text-[24px]">point_of_sale</span>
-                                            <div className="flex-1">
-                                                <p className="text-on-surface font-semibold text-sm">No hay un turno de caja abierto</p>
-                                                <p className="text-on-surface-variant text-xs mt-1">
-                                                    Debes abrir caja antes de registrar un cobro.
-                                                </p>
-                                                <button
-                                                    onClick={() => navigate('/caja')}
-                                                    className="btn-primary mt-3 text-sm"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">lock_open</span> Abrir Caja
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                                {!payableStatus && <OrderStatusNotice status={order.status} />}
 
-                                <div className={`bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4 ${!shift ? 'opacity-60' : ''}`}>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <span className="font-display text-lg text-on-surface font-bold">
-                                            Q {amountDue.toFixed(2)}
-                                        </span>
-                                        <span className="px-2.5 py-1 rounded-full text-[0.6875rem] font-bold bg-tertiary-container/30 text-tertiary">
-                                            {order.table_name || 'Para llevar'}
-                                        </span>
-                                    </div>
-                                    <div className="text-sm text-on-surface-variant space-y-1">
-                                        {order.items?.map((item, i) => (
-                                            <div key={i} className="flex justify-between">
-                                                <span>
-                                                    {item.quantity}x {item.product_name}
-                                                    {item.modifier_labels && (
-                                                        <span className="text-xs ml-1">({item.modifier_labels})</span>
-                                                    )}
-                                                </span>
-                                                <span className="font-semibold text-on-surface">
-                                                    Q{(item.quantity * item.unit_price).toFixed(2)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <hr className="border-outline-variant/20 my-3" />
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-on-surface-variant">Subtotal</span>
-                                        <span>Q{Number(order.subtotal || 0).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-on-surface-variant">IVA 12%</span>
-                                        <span className={applyTax ? '' : 'line-through text-on-surface-variant'}>
-                                            Q{Number(order.tax || 0).toFixed(2)}
-                                        </span>
-                                    </div>
+                                <OrderDetail
+                                    order={order}
+                                    amountDue={amountDue}
+                                    applyTax={applyTax}
+                                    onToggleTax={setApplyTax}
+                                />
 
-                                    <label className="flex items-center gap-2 mt-3 pt-3 border-t border-outline-variant/20 cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={applyTax}
-                                            onChange={e => setApplyTax(e.target.checked)}
-                                            className="w-4 h-4 accent-primary"
-                                        />
-                                        <span className="text-sm font-semibold text-on-surface">Aplicar IVA 12%</span>
-                                    </label>
-                                </div>
+                                <PendingItemsNotice count={pendingCount} />
 
-                                {shift && (
+                                {payableStatus && (
                                     <>
-                                        <PaymentMethodSelector selected={method} onSelect={setMethod} />
-
-                                        {method === 'efectivo' && (
-                                            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4">
-                                                <CashPaymentForm
-                                                    total={amountDue}
-                                                    onAmountGivenChange={setAmountGiven}
-                                                />
+                                        {!shift && (
+                                            <div className="bg-tertiary-container/20 border border-tertiary/40 rounded-xl p-4">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="material-symbols-outlined text-tertiary text-[24px]">point_of_sale</span>
+                                                    <div className="flex-1">
+                                                        <p className="text-on-surface font-semibold text-sm">No hay un turno de caja abierto</p>
+                                                        <p className="text-on-surface-variant text-xs mt-1">
+                                                            Debes abrir caja antes de registrar un cobro.
+                                                        </p>
+                                                        <button
+                                                            onClick={() => navigate('/caja')}
+                                                            className="btn-primary mt-3 text-sm"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">lock_open</span> Abrir Caja
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
 
-                                        {method !== 'efectivo' && (
-                                            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4">
-                                                <p className="text-on-surface-variant text-sm text-center">
-                                                    El pago con <strong>{method === 'tarjeta' ? 'tarjeta' : 'QR'}</strong> se registra aqui.
-                                                    <br />El cobro real se realiza en la terminal fisica.
-                                                </p>
-                                            </div>
+                                        {shift && (
+                                            <>
+                                                <PaymentMethodSelector selected={method} onSelect={setMethod} />
+
+                                                {method === 'efectivo' && (
+                                                    <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4">
+                                                        <CashPaymentForm
+                                                            total={amountDue}
+                                                            onAmountGivenChange={setAmountGiven}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {method !== 'efectivo' && (
+                                                    <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4">
+                                                        <p className="text-on-surface-variant text-sm text-center">
+                                                            El pago con <strong>{method === 'tarjeta' ? 'tarjeta' : 'QR'}</strong> se registra aqui.
+                                                            <br />El cobro real se realiza en la terminal fisica.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
+
+                                        <button
+                                            onClick={handlePay}
+                                            disabled={!canPay}
+                                            className={`btn-primary w-full justify-center text-base py-4 ${
+                                                !canPay ? 'opacity-50 cursor-not-allowed' : ''
+                                            }`}
+                                            data-testid="pay-button"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">{shift ? 'savings' : 'lock'}</span>
+                                            {shift ? `Cobrar Q ${amountDue.toFixed(2)}` : 'Abre caja para cobrar'}
+                                        </button>
                                     </>
                                 )}
 
                                 <button
-                                    onClick={handlePay}
-                                    disabled={!canPay}
-                                    className={`btn-primary w-full justify-center text-base py-4 ${
-                                        !canPay ? 'opacity-50 cursor-not-allowed' : ''
-                                    }`}
+                                    onClick={handleVoid}
+                                    disabled={processing}
+                                    className="btn-danger w-full justify-center text-sm py-3 disabled:opacity-50"
+                                    data-testid="void-order"
                                 >
-                                    <span className="material-symbols-outlined text-[20px]">{shift ? 'savings' : 'lock'}</span>
-                                    {shift ? `Cobrar Q ${amountDue.toFixed(2)}` : 'Abre caja para cobrar'}
+                                    <span className="material-symbols-outlined text-[16px]">block</span> Anular orden
                                 </button>
                             </>
                         )}
@@ -688,11 +685,106 @@ function PaymentView({ orderId, navigate }) {
                 )}
             </main>
 
+            {confirmModal}
+
             <ReceiptModal
                 payment={receipt?.payment}
                 order={receipt?.order}
                 onClose={handleReceiptClose}
             />
+        </div>
+    );
+}
+
+export function OrderPaidNotice({ status, onBack }) {
+    const pagada = status === 'pagada';
+    return (
+        <div
+            className={`${pagada ? 'bg-tertiary-container/20 border-tertiary/30 text-tertiary' : 'bg-error-container/10 border-error/30 text-error'} border rounded-xl p-4 text-center`}
+            data-testid="paid-notice"
+        >
+            <span className="material-symbols-outlined text-[28px]">{pagada ? 'check_circle' : 'block'}</span>
+            <p className="font-semibold mt-1 text-sm" data-testid="paid-notice-title">
+                {pagada ? 'Esta orden ya fue cobrada' : 'Esta orden fue anulada'}
+            </p>
+            <button onClick={onBack} className="btn-secondary mt-3 text-sm">
+                Volver al POS
+            </button>
+        </div>
+    );
+}
+
+export function OrderStatusNotice({ status }) {
+    if (status === 'lista' || status === 'completada') return null;
+    const pausada = status === 'pausada';
+    return (
+        <div className="bg-tertiary-container/20 border border-tertiary/30 rounded-xl p-4 text-center" data-testid="status-notice">
+            <span className="material-symbols-outlined text-tertiary text-[28px]">{pausada ? 'pause_circle' : 'restaurant'}</span>
+            <p className="text-tertiary font-semibold mt-1 text-sm" data-testid="status-notice-title">
+                {pausada ? 'Envía la orden a cocina antes de cobrar' : 'Espera a que la cocina marque la orden como lista'}
+            </p>
+        </div>
+    );
+}
+
+export function OrderDetail({ order, amountDue, applyTax, onToggleTax }) {
+    return (
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 p-4" data-testid="order-detail">
+            <div className="flex justify-between items-center mb-3">
+                <span className="font-display text-lg text-on-surface font-bold">
+                    Q {Number(amountDue || 0).toFixed(2)}
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[0.6875rem] font-bold bg-tertiary-container/30 text-tertiary">
+                    {order.table_name || 'Para llevar'}
+                </span>
+            </div>
+            <div className="text-sm text-on-surface-variant space-y-1" data-testid="order-detail-items">
+                {order.items?.map((item, i) => (
+                    <div key={i} className="flex justify-between">
+                        <span>
+                            {item.quantity}x {item.product_name}
+                            {item.modifier_labels && (
+                                <span className="text-xs ml-1">({item.modifier_labels})</span>
+                            )}
+                        </span>
+                        <span className="font-semibold text-on-surface">
+                            Q{(item.quantity * item.unit_price).toFixed(2)}
+                        </span>
+                    </div>
+                ))}
+            </div>
+            <hr className="border-outline-variant/20 my-3" />
+            <div className="flex justify-between text-sm">
+                <span className="text-on-surface-variant">Subtotal</span>
+                <span>Q{Number(order.subtotal || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+                <span className="text-on-surface-variant">IVA 12%</span>
+                <span className={applyTax ? '' : 'line-through text-on-surface-variant'}>
+                    Q{Number(order.tax || 0).toFixed(2)}
+                </span>
+            </div>
+
+            <label className="flex items-center gap-2 mt-3 pt-3 border-t border-outline-variant/20 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    checked={applyTax}
+                    onChange={e => onToggleTax(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm font-semibold text-on-surface">Aplicar IVA 12%</span>
+            </label>
+        </div>
+    );
+}
+
+export function PendingItemsNotice({ count }) {
+    if (!count) return null;
+    return (
+        <div className="bg-error-container/10 border border-error/30 rounded-xl p-3 text-center" data-testid="pending-items">
+            <p className="text-error text-sm font-semibold" data-testid="pending-items-title">
+                Faltan {count} producto(s) por enviar a cocina
+            </p>
         </div>
     );
 }

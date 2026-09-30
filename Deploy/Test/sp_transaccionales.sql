@@ -306,6 +306,7 @@ CREATE PROCEDURE `sp_send_to_kitchen`(IN p_order_id INT)
 BEGIN
     DECLARE v_status VARCHAR(20);
     DECLARE v_items INT DEFAULT 0;
+    DECLARE v_pending INT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -322,9 +323,9 @@ BEGIN
             SET MESSAGE_TEXT = 'Orden no encontrada';
     END IF;
 
-    IF v_status <> 'pausada' THEN
+    IF v_status IN ('pagada', 'anulada') THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Solo se pueden enviar a cocina ordenes en estado pausada';
+            SET MESSAGE_TEXT = 'No se puede enviar una orden pagada o anulada';
     END IF;
 
     SELECT COUNT(*) INTO v_items FROM order_items WHERE order_id = p_order_id;
@@ -334,13 +335,29 @@ BEGIN
             SET MESSAGE_TEXT = 'La orden no tiene items para enviar a cocina';
     END IF;
 
+    SELECT COUNT(*) INTO v_pending FROM order_items
+    WHERE order_id = p_order_id AND sent = 0;
+
+    IF v_pending = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No hay items nuevos para enviar a cocina';
+    END IF;
+
     UPDATE order_items
     SET sent = 1, sent_at = CURRENT_TIMESTAMP
     WHERE order_id = p_order_id AND sent = 0;
 
     UPDATE orders
-    SET status = 'enviada', sent_at = CURRENT_TIMESTAMP
+    SET status = 'enviada'
     WHERE id = p_order_id;
+
+    IF v_status IN ('pausada', 'lista', 'completada') THEN
+        UPDATE orders
+        SET sent_at = CURRENT_TIMESTAMP,
+            ready_at = NULL,
+            completed_at = NULL
+        WHERE id = p_order_id;
+    END IF;
 
     COMMIT;
 

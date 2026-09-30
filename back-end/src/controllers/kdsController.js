@@ -18,7 +18,7 @@ function groupByOrder(rows) {
             orders.set(id, order);
         }
 
-        if (item_id !== null && item_id !== undefined) {
+        if (item_id !== null && item_id !== undefined && Number(sent) === 1) {
             order.items.push(toJSON({
                 item_id, product_id, product_name, quantity,
                 unit_price, modifier_labels, notes, sent, prepared_at
@@ -26,7 +26,7 @@ function groupByOrder(rows) {
         }
     }
 
-    return [...orders.values()];
+    return [...orders.values()].filter(order => order.items.length > 0);
 }
 
 export function createKdsController(pool) {

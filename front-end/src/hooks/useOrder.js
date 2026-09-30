@@ -11,6 +11,7 @@ const emptyOrder = {
     mode: 'mesa',
     notes: '',
     items: [],
+    status: null,
     isLoaded: false
 };
 
@@ -28,7 +29,8 @@ export function useOrder() {
             unit_price: price,
             modifiers,
             modifier_labels: modifierLabels,
-            notes: ''
+            notes: '',
+            persisted: false
         };
         setOrder(prev => ({ ...prev, items: [...prev.items, item] }));
         return item;
@@ -70,7 +72,9 @@ export function useOrder() {
             product_image: item.product_image,
             unit_price: Number(item.unit_price),
             modifiers: item.modifiers || [],
-            modifier_labels: item.modifier_labels || ''
+            modifier_labels: item.modifier_labels || '',
+            sent: Boolean(item.sent),
+            persisted: true
         }));
         setOrder({
             orderId: orderData.id,
@@ -79,6 +83,7 @@ export function useOrder() {
             customerName: orderData.customer_name || '',
             mode: orderData.mode || 'mesa',
             notes: orderData.notes || '',
+            status: orderData.status || null,
             items,
             isLoaded: true
         });
@@ -102,27 +107,50 @@ export function useOrder() {
     const hasItems = order.items.length > 0;
 
     async function saveOrder() {
-        const payloads = order.items.map(i => ({
+        const toPayload = i => ({
             product_id: Number(i.product_id),
             quantity: Number(i.quantity),
             unit_price: Number(i.unit_price),
             modifiers: i.modifiers,
             modifier_labels: i.modifier_labels || null,
             notes: i.notes || null
-        }));
+        });
 
-        const data = {
+        const header = {
             table_id: order.tableId || null,
             customer_name: (order.customerName || '').trim() || null,
             mode: order.mode,
-            notes: order.notes || null,
-            items: payloads
+            notes: order.notes || null
         };
 
-        if (order.orderId) {
-            return api.updateOrder(order.orderId, data);
+        if (!order.orderId) {
+            return api.createOrder({ ...header, items: order.items.map(toPayload) });
         }
-        return api.createOrder(data);
+
+        if (order.status === 'pausada') {
+            return api.updateOrder(order.orderId, { ...header, items: order.items.map(toPayload) });
+        }
+
+        const pending = order.items.filter(i => !i.persisted);
+        for (const item of pending) {
+            await api.addOrderItem(order.orderId, toPayload(item));
+        }
+        if (pending.length > 0) {
+            const full = await api.getOrder(order.orderId);
+            loadOrder(full);
+        }
+        return { order_id: order.orderId, added: pending.length };
+    }
+
+    async function sendToKitchen(id) {
+        const orderId = id || order.orderId;
+        if (!orderId) {
+            throw new Error('Guarda la orden antes de enviarla a cocina');
+        }
+        const result = await api.sendToKitchen(orderId);
+        const full = await api.getOrder(orderId);
+        loadOrder(full);
+        return result;
     }
 
     return {
@@ -138,6 +166,7 @@ export function useOrder() {
         reset,
         computeTotals,
         hasItems,
-        saveOrder
+        saveOrder,
+        sendToKitchen
     };
 }

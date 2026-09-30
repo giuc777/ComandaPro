@@ -1,15 +1,23 @@
 import TicketItem from './TicketItem';
+import OrderStatusBadge from './OrderStatusBadge';
 
-export default function Ticket({ items, onUpdateQuantity, onRemove, totals }) {
+export default function Ticket({ items, onUpdateQuantity, onRemove, totals, status, editable = true, allowPersistedEdits = false }) {
     const itemCount = items.length;
     const totalUnits = items.reduce((s, i) => s + i.quantity, 0);
+    const pendingCount = items.filter(i => !i.sent).length;
 
     return (
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 flex flex-col h-full">
-            <div className="px-4 py-3 border-b border-outline-variant/15 flex items-center justify-between">
-                <span className="font-semibold text-sm text-on-surface">Ticket Actual</span>
-                <span className="text-[0.6875rem] text-on-surface-variant">
+            <div className="px-4 py-3 border-b border-outline-variant/15 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-semibold text-sm text-on-surface">Ticket Actual</span>
+                    <OrderStatusBadge status={status} />
+                </div>
+                <span className="text-[0.6875rem] text-on-surface-variant text-right">
                     {itemCount} {itemCount === 1 ? 'producto' : 'productos'} · {totalUnits} {totalUnits === 1 ? 'unidad' : 'unidades'}
+                    {pendingCount > 0 && (
+                        <span className="block text-secondary font-semibold">{pendingCount} por enviar</span>
+                    )}
                 </span>
             </div>
 
@@ -28,6 +36,8 @@ export default function Ticket({ items, onUpdateQuantity, onRemove, totals }) {
                                     onUpdateQuantity={onUpdateQuantity}
                                     onRemove={onRemove}
                                     isLast={idx === items.length - 1}
+                                    editable={editable}
+                                    allowPersistedEdits={allowPersistedEdits}
                                 />
                             </div>
                         ))}

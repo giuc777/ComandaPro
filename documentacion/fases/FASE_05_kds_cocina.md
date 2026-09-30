@@ -85,10 +85,11 @@ Las sub-fases C, D, F son de esta fase; **E es FASE 15**.
 | A | Datos y procedimientos almacenados | ✅ 2026-09-28 |
 | B | Backend (endpoints y permisos) | ✅ 2026-09-28 |
 | C | Pantalla de Cocina (KDS) | ✅ 2026-09-28 |
-| D | POS: enviar a cocina | ⬜ Pendiente |
+| D | POS: enviar a cocina | ✅ 2026-09-29 |
 | E | Pantalla de órdenes del admin (FASE 15) | ⬜ Pendiente |
-| F | Dashboard y Caja | ⬜ Pendiente |
+| F | Dashboard y Caja | 🟡 Parcial (F.3 ✅ 2026-09-29) |
 | G | Verificación y documentación | ⬜ Pendiente |
+| H | Agregar ítems a ordenes en curso (POS) | ✅ 2026-09-29 |
 
 ---
 
@@ -359,17 +360,39 @@ Clases CSS ya preparadas: `.kds-card` (`front-end/src/index.css:162`).
 - Botón **"Enviar a Cocina"** por tarjeta (junto a *Retomar*, *Cobrar*, *Anular*).
 - **"Cobrar"** habilitado solo si `status === 'lista' || 'completada'`.
 
-### Tareas
-- [ ] Botón de envío + lógica guardar-y-enviar
-- [ ] Badge de estado e ítems "EN COCINA"
-- [ ] Botón enviar en el panel de pausadas
-- [ ] `sp_get_order` expone `sent` (A.3) y el front lo consume
+### Tareas — ✅ completadas (2026-09-29)
+- [x] Botón de envío + lógica guardar-y-enviar
+- [x] Badge de estado e ítems "EN COCINA"
+- [x] Botón enviar en el panel de pausadas
+- [x] `sp_get_order` expone `sent` (A.3) y el front lo consume
 
-### Criterios de aceptación
-- [ ] Enviar marca `enviada` y la orden aparece en el KDS en ≤15 s
-- [ ] Enviar dos veces la misma orden no duplica ítems (solo los `sent=0`)
-- [ ] Un borrador pausado puede retomarse, editarse y enviarse
-- [ ] El ticket muestra *"Listo para cobrar"* cuando cocina marca `lista`
+### Criterios de aceptación — ✅ verificados (2026-09-29)
+- [x] Enviar marca `enviada` y la orden aparece en el KDS en ≤15 s
+- [x] Enviar dos veces la misma orden no duplica ítems (solo los `sent=0`)
+- [x] Un borrador pausado puede retomarse, editarse y enviarse
+- [x] El ticket muestra *"Listo para cobrar"* cuando cocina marca `lista`
+
+### Notas de implementación (2026-09-29)
+- **`GET /api/orders?status=`** ahora acepta una **lista separada por comas**
+  (validada contra el ENUM; `status` desconocido → **400**). `sp_list_parked_orders()`
+  sigue usándose para el caso simple `pausada`; el resto se resuelve con un bucle de
+  `sp_list_orders_by_status(?)` **sin tocar SQL**.
+- `api.getActiveOrders()` consulta
+  `?status=pausada,enviada,preparando,lista,completada`; el panel refresca cada **15 s**
+  (además del disparo por `refreshTrigger`), por lo que una orden marcada `lista` por
+  cocina aparece sola en el POS.
+- `useOrder` guarda `status` (null = borrador), `saveOrder()` falla con
+  *"Solo se pueden editar ordenes pausadas"* si la orden ya salió y
+  `sendToKitchen(id)` recarga la orden para reflejar `sent`/`status`.
+- `PosPage`: `canEdit = !orderId || status === 'pausada'` → oculta el selector de
+  mesa/cliente/notas (aviso de solo lectura), el toggle de modo y los controles de
+  ítems; el aviso de producto bloqueado aparece como toast.
+- `TicketItem` renderiza `EN COCINA` (atenuado) si `sent`, y cantidad estática si
+  `editable === false` (sin botones).
+- Nuevos componentes: `OrderStatusBadge.jsx` (etiquetas del POS) —
+  `KdsStatusBadge` queda como el badge exclusivo del KDS.
+- Suite `test_d.ps1`: **17/17 OK** (D15 devuelve **201** con `payment_id`);
+  SSR de componentes: **22/22 OK**; `pnpm build` + `oxlint` sin errores.
 
 ---
 
@@ -400,25 +423,46 @@ LIMIT 20
 - Sección *"Ordenes Activas"*: añadir pill de estado + minutos, y enlace
   **"Ver todas → /ordenes"** (solo Administrador) y botón *"Abrir KDS"*.
 
-### F.3 `CajaPage.jsx`
-- `canPay = order && (order.status === 'lista' || order.status === 'completada') && shift && ...`
-- Mensaje contextual: si la orden está `enviada`/`preparando` →
-  *"Espera a que la cocina marque la orden como lista"*.
-- El selector/lista desde la que se entra a cobrar debe ofrecer órdenes
-  `lista`/`completada` (hoy solo sale de *Cobrar* en el panel de pausadas,
-  que ya se ajusta en D.3).
+### F.3 `CajaPage.jsx` — ✅ implementado (2026-09-29)
+- `canPay = (status === 'lista' || status === 'completada') && pendingCount === 0 && shift && ...`
+- Estados de la pantalla `PaymentView` (antes todo lo que no era `pausada`
+  mostraba el falso *"Esta orden ya fue cobrada"* y ocultaba el detalle):
+  - `pagada` → *"Esta orden ya fue cobrada"* · `anulada` → *"Esta orden fue anulada"*
+  - `enviada`/`preparando` → *"Espera a que la cocina marque la orden como lista"*
+  - `pausada` → *"Envía la orden a cocina antes de cobrar"*
+  - `lista`/`completada` → detalle + método de pago + botón **Cobrar**
+- El detalle de la orden (ítems, subtotal, IVA, total) se muestra en todo estado
+  no pagado; si hay ítems con `sent = 0` se avisa y se deshabilita **Cobrar**
+  (evita el 409 *"Hay items sin enviar a cocina"*).
+- Botón **Anular orden** en la pantalla de Caja (con confirmación) para toda
+  orden no pagada/anulada, y `handleAnular` del POS ahora muestra el error real.
+- En `routes/orders.js` el guard de `DELETE /orders/:id` pasó de `kds` a
+  **`pos`** (el Cajero tiene `pos=1` y `kds=0`); `/kds` conserva su guard.
+- La entrada a cobrar sigue siendo el botón **Cobrar** del panel
+  *"Órdenes en Curso"* (solo para `lista`/`completada`, ajuste D.3).
 
 ### Tareas
 - [ ] Query del dashboard con todos los estados activos
 - [ ] Refresco 15 s + enlaces en el Dashboard
-- [ ] `canPay` + mensajes en Caja
-- [ ] `node --check` + `pnpm build`
+- [x] `canPay` + mensajes en Caja (**F.3**, 2026-09-29)
+- [x] `node --check` + `pnpm build`
 
 ### Criterios de aceptación
 - [ ] El Dashboard muestra órdenes `enviada`/`preparando`/`lista` y las refresca solo
 - [ ] Con más de 20 órdenes activas no se pierden sin aviso
-- [ ] Caja rechaza cobrar una orden `preparando` y permite cobrar una `lista`
+- [x] Caja rechaza cobrar una orden `preparando` y permite cobrar una `lista`
 - [ ] Tras cobrar, la orden pasa a `pagada` y sale de KDS y Dashboard
+      (KDS verificado; Dashboard pendiente con F.1)
+
+### Notas de verificación — F.3 (2026-09-29)
+- `test_f.ps1`: **15/15 OK** — 409 en `enviada`/`preparando`, 409 con ítems sin
+  enviar, 201 en `lista`, orden fuera de la lista activa, pago visible en
+  *Movimientos del turno*, **Cajero anula `lista` → 200** (antes 403) y
+  anular `pagada` → 409.
+- SSR de los estados de Caja: **11/11 OK**; `oxlint` 0; `pnpm build` OK;
+  `node --check` OK. Regresiones: `test_d` 18/18, `test_h` 26/26.
+- Al reenviar ítems nuevos desde `lista` la orden vuelve a `enviada` (decisión H),
+  por lo que la cocina debe recorrer `preparando → lista` antes de poder cobrar.
 
 ---
 
@@ -429,9 +473,84 @@ LIMIT 20
 - [ ] Revisión estática de los SQL (conteos, FKs, ASCII/sin BOM) — **sin ejecutar SQL**
 - [ ] Prueba manual del flujo completo:
       `pausar → enviar → Preparar → Listo → cobrar` + edición admin (FASE 15) + anulación
-- [ ] Prueba de permisos: Cajero sin `kds` → 403; Barista edita solo `pausada`
+- [ ] Prueba de permisos: anular exige módulo `pos` (Cajero/Barista ✓, 2026-09-29);
+      la pantalla `/kds` sigue exigiendo `kds`; Barista edita solo `pausada`
 - [ ] Actualizar `documentacion/README.md`, FASE 05 y FASE 15 a **✅ Completada**
 - [ ] Actualizar `documentacion/ManualDeUsuario.md` (flujo de cocina y cobro)
+
+---
+
+## Sub-fase H — Agregar ítems a ordenes en curso (POS)
+
+**Objetivo:** el mesero puede agregar productos a una orden que ya salió a cocina
+(p. ej. el cliente pide algo más tarde) sin tocar lo ya entregado.
+
+> **Decisiones del cliente (2026-09-29):** solo **agregar** ítems nuevos; editable en
+> `pausada|enviada|preparando|lista|completada` (nunca `pagada`/`anulada`); al reenviar
+> la orden vuelve a **`enviada`**; la edición se hace **desde el POS** (panel).
+
+### H.1 Backend (`back-end/src/controllers/`)
+- `orderController.js`
+  - `POST /:id/items` sin bloqueo de estado (el SP ya valida `pagada`/`anulada` → 409);
+    el ítem nace con `sent = 0` y recalcula totales.
+  - `DELETE /:id/items/:itemId`: consulta `order_items.sent` + `orders.status`;
+    409 si `sent = 1` (*"El item ya fue enviado a cocina y no se puede eliminar"*) o si
+    la orden está pagada/anulada; ítem inexistente → **404** (antes devolvía 200 sin borrar).
+  - `PUT /:id`: cabecera (mesa/cliente/notas/modo) editable en cualquier estado no pagado;
+    el array `items` solo en `pausada` → 409 *"Solo se pueden reemplazar los items de una
+    orden pausada"* (evita perder `sent` con `sp_clear_order_items`).
+  - se eliminó `orderLockError` (reemplazada por las reglas anteriores).
+- `kdsController.js`: `groupByOrder` omite los ítems `sent = 0` y descarta las órdenes
+  que quedan sin ítems visibles (la cocina no ve lo que aún no se envió).
+- `paymentController.js`: 409 *"Hay items sin enviar a cocina"* si la orden tiene
+  `sent = 0` (impide cobrar algo que nunca llegó a cocina).
+
+### H.2 SQL — `sp_send_to_kitchen` (migración 019 + 3 espejos)
+- Estados admitidos: `pausada|enviada|preparando|lista|completada`
+  (`pagada`/`anulada` → 409).
+- Marca **solo** los ítems con `sent = 0`; si no hay pendientes →
+  409 *"No hay items nuevos para enviar a cocina"* (conserva el bloqueo de doble envío).
+- `status = 'enviada'` siempre; si venía de `pausada`, `lista` o `completada` renueva
+  `sent_at` y limpia `ready_at`/`completed_at` (el cronómetro del KDS y los tiempos de
+  cocina corresponden al nuevo ciclo).
+- Archivos: `database/migrations/019_editar_ordenes_activas.sql` (**aplicada** a
+  `comandapro`), `database/procedures/006_order_procedures.sql`,
+  `Deploy/Test/sp_transaccionales.sql`, `Deploy/Produccion/sp_transaccionales.sql`.
+
+### H.3 Frontend
+- `useOrder.js`: cada ítem lleva `persisted` (`loadOrder` → `true`, `addItem` → `false`);
+  `saveOrder()` elige el camino: nueva → `createOrder`; `pausada` → `PUT` con **todos**
+  los ítems; activa → `POST /:id/items` por ítem nuevo y recarga la orden.
+- `PosPage.jsx`: `canReplace` (nueva/pausada), `isAppendMode` (activa), `canAdd`;
+  botones **Enviar a Cocina (N)** + **Guardar** en modo agregar; aviso de solo lectura
+  para la cabecera; `handleRemoveItem` borra vía API los ítems ya persistidos.
+- `Ticket.jsx` / `TicketItem.jsx`: prop `allowPersistedEdits` controla la cantidad de los
+  ítems ya guardados; los no enviados siempre se pueden borrar; los enviados quedan con
+  **EN COCINA**.
+- `ParkedOrdersPanel.jsx`: botón **Agregar** en las tarjetas de órdenes activas
+  (junto a *Cobrar* y *Anular*).
+
+### Tareas — ✅ completadas (2026-09-29)
+- [x] Reglas de edición en `orderController` (agregar / borrar / cabecera / replace)
+- [x] `sp_send_to_kitchen` incremental + migración 019 aplicada
+- [x] KDS oculta ítems pendientes y el cobro se bloquea con pendientes
+- [x] Modo "agregar" en el POS (grid + ticket + botones)
+- [x] Botón **Agregar** en el panel de órdenes en curso
+
+### Criterios de aceptación — ✅ verificados (2026-09-29)
+- [x] Agregar un ítem a una orden `enviada` → 201 y `sent = 0` (los entregados no cambian)
+- [x] Borrar un ítem enviado → 409; borrar un ítem pendiente → 200
+- [x] Reenviar marca solo los pendientes; sin pendientes → 409 (sin duplicar ítems)
+- [x] `lista` + agregar + reenviar → la orden vuelve a `enviada` y `sent_at` se renueva
+- [x] Cobrar con pendientes → 409; una orden `pagada` devuelve 409 en item/cabecera/envío
+- [x] El KDS no muestra los ítems sin enviar
+
+### Notas de verificación (2026-09-29)
+- Suite `test_h.ps1`: **26/26 OK**; regresión `test_d.ps1` (expectativas ajustadas a H):
+  **18/18 OK**; SSR de componentes: **12/12 OK**; `pnpm build` + `oxlint` sin errores;
+  `node --check` OK; migración 019 re-ejecutable (idempotente).
+- `DELETE /orders/:id/items/:itemId` ahora responde **404** cuando el ítem no existe
+  (antes devolvía 200 sin eliminar nada).
 
 ---
 
@@ -448,7 +567,7 @@ LIMIT 20
 | 7 | FASE 04 y FASE 06 siguen documentando "sin KDS / cobro manual" | Actualizar en G |
 | 8 | `sp_deduct_inventory` / inventario siguen deduciendo **al pagar** | Sin cambio |
 | 9 | Bugs conocidos fuera de alcance: `updateProduct` escribe `image=null` y no hay handler de errores de multer | Pendiente de revisión aparte, cuando se atiendan los bugs |
-| 10 | **Bloqueo transitorio:** el cobro ya exige `lista`/`completada` (activado en A) pero el POS aún no expone **Enviar a Cocina** (sub-fase D) → una orden `pausada` no se puede cobrar desde la UI (409, verificado 2026-09-28) | Ejecutar D como **siguiente paso**; mientras tanto, validar con `POST /api/orders/:id/send` y que cocina marque `lista` |
+| 10 | ~~**Bloqueo transitorio:** el cobro ya exige `lista`/`completada` pero el POS no expone **Enviar a Cocina**~~ | **Resuelto (sub-fase D, 2026-09-29):** el POS ya envía a cocina y el panel ofrece *Cobrar* solo en `lista`/`completada` |
 
 ---
 
@@ -456,7 +575,7 @@ LIMIT 20
 
 | Tipo | Archivos |
 |------|----------|
-| SQL | `database/migrations/018_kds_cocina.sql`, `database/procedures/006_order_procedures.sql`, `011_report_procedures.sql`, `Deploy/Produccion/{migrations/018, sp_lectura, sp_transaccionales, sp_simple}.sql`, espejo `Deploy/Test/` |
-| Backend | `orderController.js`, `kdsController.js` (nuevo), `adminOrdersController.js` (nuevo, FASE 15), `routes/orders.js`, `routes/kds.js` (nuevo), `routes/adminOrders.js` (nuevo), `index.js`, `reportController.js` |
-| Frontend | `KdsPage.jsx`, `components/kds/*` (nuevos), `utils/format.js`, `PosPage.jsx`, `useOrder.js`, `ParkedOrdersPanel.jsx`, `CajaPage.jsx`, `Dashboard.jsx`, `apiClient.js` |
+| SQL | `database/migrations/018_kds_cocina.sql`, **`019_editar_ordenes_activas.sql` (H)**, `database/procedures/006_order_procedures.sql`, `011_report_procedures.sql`, `Deploy/Produccion/{migrations/018, sp_lectura, sp_transaccionales, sp_simple}.sql`, espejo `Deploy/Test/` |
+| Backend | `orderController.js`, `kdsController.js` (nuevo), `paymentController.js` (H), `adminOrdersController.js` (nuevo, FASE 15), `routes/orders.js`, `routes/kds.js` (nuevo), `routes/adminOrders.js` (nuevo), `index.js`, `reportController.js` |
+| Frontend | `KdsPage.jsx`, `components/kds/*` (nuevos), `utils/format.js`, `PosPage.jsx`, `useOrder.js`, `ParkedOrdersPanel.jsx`, `Ticket.jsx`, `TicketItem.jsx`, `OrderStatusBadge.jsx` (nuevo), `CajaPage.jsx`, `Dashboard.jsx`, `apiClient.js` |
 | Docs | este archivo, FASE 15, `documentacion/README.md` |

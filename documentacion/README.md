@@ -40,7 +40,7 @@ Fase 1 (Auth)
              │
              └──→ Fase 4 (Órdenes POS) ✅
                       │
-                       ├──→ Fase 5 (KDS) 🔄 A-C ✅ · D-G pendientes
+                        ├──→ Fase 5 (KDS) 🔄 A-D + H + F.3 ✅ · E-G pendientes
                        │        │
                        │        └──→ Fase 15 (Órdenes del Admin) 🔄 A-B ✅ · E pendiente
                        ├──→ Fase 6 (Pagos) ✅
@@ -68,20 +68,28 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > cobrar, ejecutándose dentro de la transacción de pago.
 
 > **Nota (plan de cocina y órdenes):** Fase 5 (KDS) y Fase 15 (Órdenes del
-> Administrador) están **en implementación por sub-fases**: A (datos), B (backend) y
-> C (pantalla KDS) ya están aplicadas y verificadas; faltan **D** (POS: enviar a
-> cocina), **E** (pantalla `/ordenes`), **F** (Dashboard y Caja) y **G**
-> (verificación) — ver [FASE_05](fases/FASE_05_kds_cocina.md) y
-> [FASE_15](fases/FASE_15_ordenes_admin.md).
+> Administrador) están **en implementación por sub-fases**: A (datos), B (backend),
+> C (pantalla KDS), **D (POS: enviar a cocina)**, **H (agregar ítems a ordenes en
+> curso)** y **F.3 (pantalla de cobro en Caja)** ya están aplicadas y verificadas;
+> faltan **E** (pantalla `/ordenes`), **F.1/F.2** (Dashboard) y **G**
+> (verificación) — ver [FASE_05](fases/FASE_05_kds_cocina.md)
+> y [FASE_15](fases/FASE_15_ordenes_admin.md).
 >
 > **Estado actual del flujo:** la máquina de estados y la regla de cobro **ya están
 > activas en la base de datos**: el cobro solo se permite en `lista`/`completada`
 > (antes era `pausada`), por lo que una orden `pausada` devuelve **409** al cobrarse.
-> Como el POS todavía no tiene el botón **Enviar a Cocina** (sub-fase D), hasta que
-> esa sub-fase esté lista el cobro desde la UI queda bloqueado; para validar ahora se
-> usa `POST /api/orders/:id/send` y que cocina marque la orden como `lista`. El flujo
-> anterior de "pausar y cobrar manualmente" sigue documentado en FASE_04 hasta
-> completar D.
+> Con la sub-fase D el POS ya resuelve ese flujo: **"Enviar a Cocina"** marca la orden
+> `enviada`, la cocina la mueve a `preparando` → `lista` (visible en el KDS ≤15 s) y
+> el panel **"Órdenes en Curso"** habilita **Cobrar** únicamente en
+> `lista`/`completada`. Con la sub-fase H el mismo panel permite **Agregar** productos
+> a una orden que ya salió (la orden vuelve a `enviada` al reenviarse, la cocina solo
+> ve lo enviado y el cobro se bloquea si quedan ítems sin enviar). Con **F.3** la
+> pantalla de Caja (`/caja?order=`) muestra el detalle y el formulario de pago en
+> `lista`/`completada`, mensajes contextuales en los demás estados (ya no aparece el
+> falso *"Esta orden ya fue cobrada"*), avisa si faltan productos por enviar y permite
+> **Anular**; el guard de anular pasó del módulo `kds` al **`pos`** (así el Cajero
+> también puede anular). Pendiente: **F.1/F.2** (Dashboard) y **G**. El flujo anterior
+> de "pausar y cobrar manualmente" sigue documentado en FASE_04 hasta F y G.
 
 > **Nota (limpieza de catálogos):** Los grupos `menu_cafe` y `proveedores` fueron
 > retirados (soft-delete) por duplicar `products` y `suppliers` respectivamente.

@@ -21,6 +21,15 @@ export function createPaymentController(pool) {
             }
 
             try {
+                const pendingRows = await pool.query(
+                    'SELECT COUNT(*) AS pending FROM order_items WHERE order_id = ? AND sent = 0',
+                    [Number(order_id)]
+                );
+                const pending = Number(pendingRows?.[0]?.pending || 0);
+                if (pending > 0) {
+                    return res.status(409).json({ error: 'Hay items sin enviar a cocina' });
+                }
+
                 const [result] = await pool.query(
                     'CALL sp_record_payment(?, ?, ?, ?, ?, ?)',
                     [Number(order_id), method, amount_given || null, cashier_id, sat_invoice || null, applyTax]
