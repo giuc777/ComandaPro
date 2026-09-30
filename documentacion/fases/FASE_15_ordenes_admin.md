@@ -38,13 +38,20 @@ creó ni en qué etapa de cocina estén.
 | Ubicación | Ruta nueva **`/ordenes`**, visible solo para `Administrador` |
 | Protección | Mismo patrón que `/usuarios`: `<ModuleRoute hasModule={() => user?.role === 'Administrador'} moduleKey="ordenes">` |
 | Edición | **Completa**: mesa, cliente, modo, notas, cantidades, alta/baja de ítems |
-| Estados editables | Cualquiera **excepto** `pagada` y `anulada` (para cualquier otro estado hace falta ser Administrador; no-admin solo en `pausada`) |
+| Estados editables | **Cabecera** (mesa/cliente/modo/notas): cualquier rol con módulo `pos` en cualquier estado no pagado (regla de la sub-fase H). **Reemplazo de `items`**: solo Administrador, o cualquier rol si la orden está `pausada`. `pagada`/`anulada` → **409** siempre |
 | Sincronización de ítems | **Reconciliación por `item_id`**: conserva `sent`/`sent_at`/`prepared_at` de los existentes; sin `item_id` → INSERT con `sent=0`; ids ausentes del payload → `DELETE` |
 | Recálculo | Los totales los recalcula `sp_recalculate_order_totals` (IVA 12%) en el backend; el front solo muestra |
 | Ítems enviados | Se pueden editar; los ítems nuevos quedan `sent=0` y aparecen como **NUEVO** en el KDS |
 | Filtros del listado | Estados activos + `completada` (**sin filtro "Pagadas"**: solo la caja cobra) |
 | Refresco | Polling **15 s** (misma cadencia que FASE 05) |
 | Auditoría | Se agrega `updated_by` (ver A.3) para saber quién editó |
+
+> **Decisión de permisos (2026-09-30):** la regla original de esta fase (*"cualquier
+> estado activo exige Administrador"*) chocaba con la sub-fase H, que dejó verificado
+> que un Cajero puede editar la cabecera de una orden `enviada`
+> (`test_d` D12 y `test_h` H12 esperan 200). Se **conserva el comportamiento de H**:
+> el límite de Administrador aplica al **reemplazo de ítems** (409
+> *"Solo se pueden reemplazar los items de una orden pausada"*), no a la cabecera.
 
 ---
 
@@ -102,8 +109,12 @@ get   → CALL sp_get_order(?)             // cabecera + ítems
 1. `updateOrder` valida el estado editable con `SELECT ... FOR UPDATE` → **409**
    *"Estado no editable"* (no se usa `affected === 0`: `sp_reopen_order` devuelve
    `ROW_COUNT() = 0` cuando la cabecera no cambia y daría falsos positivos).
-2. Regla de permisos: Administrador siempre; rol con `pos` solo en `pausada`;
-   editar una orden activa **sin** rol Administrador → **403** (E.0).
+2. Regla de permisos de `PUT /api/orders/:id`: la **cabecera** (sin `items`) es
+   editable por cualquier rol con módulo `pos` en cualquier estado no pagado
+   (sub-fase H); el **reemplazo de `items`** solo lo hace Administrador o
+   cualquier rol si `status='pausada'` → **409** *"Solo se pueden reemplazar
+   los items de una orden pausada"*. La misma regla se revalida dentro de la
+   transacción contra el estado leído con `FOR UPDATE`.
 3. `apiClient` (`updateOrder`, `deleteOrderItem`, `addOrderItem`) revisa
    `response.ok` y propaga el error.
 4. `updateOrder` persiste `updated_by = req.user.id`.
@@ -123,8 +134,14 @@ getAdminOrder(id)               // GET /admin/orders/:id
 
 - **Validaciones** del `PUT /api/orders/:id`: 400 si un ítem no tiene
   `product_id`/`unit_price`/`quantity` válidos; **404** si la orden no existe;
-  **409** si está `pagada` o `anulada`; **403** *"Solo un administrador puede
-  editar una orden activa"* si `role !== 'Administrador' && status !== 'pausada'`.
+  **409** si está `pagada` o `anulada`.
+- **Permisos** (decisión 2026-09-30, ver nota de la tabla de decisiones):
+  - cabecera sin `items` → cualquier rol con módulo `pos`, en cualquier estado
+    no pagado (regla H);
+  - payload con `items` y `role !== 'Administrador'` → **409** *"Solo se pueden
+    reemplazar los items de una orden pausada"* si `status !== 'pausada'`;
+  - la misma regla se revalida dentro de la transacción sobre el estado leído
+    con `FOR UPDATE` (cubre el caso de que otra caja cierre la orden a la vez).
 - **Transacción**: `SELECT ... FOR UPDATE` de la orden (409 si el estado no es
   editable) → `sp_reopen_order` (si aplica) → `updated_by` →
   `reconcileOrderItems` → `sp_recalculate_order_totals`.
@@ -227,22 +244,28 @@ normaliza.
 - [x] Editar una orden `pagada` devuelve **409** y el modal lo muestra *(test_e E15; banner `order-edit-error`)*
 - [x] El admin recibe **409** si intenta editar una orden que ya no es editable (otro usuario la cobró/anuló) *(test_e E14/E15; guard con `SELECT ... FOR UPDATE`)*
 - [x] "Anular" con confirmación deja la orden en `anulada` y desaparece del listado activo *(test_e E13/E14 + `useConfirm`)*
-- [x] Un usuario no-admin editando una orden activa recibe **403** *(test_e E6; no-admin en `/admin/orders` → E2)*
+- [x] Un no-admin **sí** puede editar la cabecera de una orden activa (200, regla H) *(test_e E6, test_d D12, test_h H12)*
+- [x] Un no-admin **no** puede reemplazar los ítems de una orden activa → **409** *"Solo se pueden reemplazar los items de una orden pausada"*; en `pausada` → 200 *(test_e E6b/E12, test_h H13)*
+- [x] Un no-admin en `/admin/orders` → **403** *(test_e E2)*
 
 ---
 
 ## Verificación
 
-- [x] `node --check` en los controllers/routers nuevos
+- [x] `node --check` en los controllers/routers (35 archivos)
 - [x] `pnpm build` + `pnpm exec oxlint` en `front-end` (sin errores nuevos)
-- [x] Revisión estática de SQL agregado (FKs, ASCII sin BOM)
+- [x] Revisión estática de SQL agregado (sin BOM, sin contenido no-ASCII nuevo,
+      `DELIMITER` balanceados, sin `DROP TABLE`/`DELETE`/`TRUNCATE`)
 - [x] Render SSR de `OrdenesPage` / `OrderList` / `OrderEditModal` (editable y
       solo lectura) → **8/8**
-- [x] `test_e.ps1` contra el backend local → **20/20** (permisos, 403/409/400,
+- [x] `test_e.ps1` contra el backend local → **21/21** (permisos, 409/400,
       reconciliación, IVA 12%, KDS con `sent=0`, anulación)
 - [x] `test_e_modal.ps1` (payload idéntico al del `OrderEditModal`) → **17/17**
-- [x] BD verificada sin restos de pruebas (solo órdenes reales; 0 ítems huérfanos)
-- [ ] Prueba manual en navegador (pendiente):
+- [x] Regresiones tras el ajuste de permisos: `test_d` **18/18**, `test_h`
+      **26/26**, `test_f` **15/15**, `test_f1_api` **13/13**
+- [x] BD verificada sin restos de pruebas (solo órdenes reales; 0 ítems/pagos
+      huérfanos)
+- [ ] Prueba manual en navegador (la realiza el cliente):
   1. Mesero pausa → envía; admin ve la orden en `/ordenes` con estado `enviada`
   2. Admin edita ítems mientras `preparando`; cocina ve el ítem **NUEVO**
   3. Cocina marca `lista` → admin la ve → la caja la cobra
@@ -257,6 +280,6 @@ normaliza.
 | # | Riesgo | Mitigación |
 |---|--------|------------|
 | 1 | Editar ítems de una orden en cocina puede "engañar" al cocinero | El ítem nuevo queda `sent=0` y el KDS lo resalta como **NUEVO** |
-| 2 | Editar ítems de una orden en cocina puede "engañar" al cocinero | El ítem nuevo queda `sent=0` y el KDS lo resalta como **NUEVO**; los existentes conservan `sent`/`sent_at` (reconciliación por `item_id`, sin cambiar IDs) |
+| 2 | Reemplazar los ítems cambiaría los `id` y perdería el estado de envío | Reconciliación por `item_id`: conserva `id`, `sent`, `sent_at` y `prepared_at`; los nuevos nacen `sent=0` |
 | 3 | `DELETE` de ítems no hace *soft-delete* | Registrado como pendiente de auditoría si el cliente lo pide |
 | 4 | Si FASE 05 (A/B) no está aplicada, `/ordenes` no puede agrupar ítems | Dependencia estricta documentada en el encabezado |

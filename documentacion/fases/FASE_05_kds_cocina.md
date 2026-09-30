@@ -1,6 +1,6 @@
 # FASE 05 — Kitchen Display System (KDS) (implementación)
 
-**Estado:** 🟡 En implementación — A-D + H + F.3 + F.1/F.2 ✅ · **E ✅ (2026-09-30, en FASE 15)** · G pendientes
+**Estado:** 🟡 En implementación — A-D + H + F.3 + F.1/F.2 ✅ · **E ✅ (2026-09-30, en FASE 15)** · G.1/G.2 ✅ · prueba manual y cierre pendientes
 **Dependencias:** FASE 04 (Órdenes POS), FASE 06 (Pagos y Recibos)
 **Fase complementaria:** [FASE 15 — Pantalla de Órdenes del Administrador](FASE_15_ordenes_admin.md)
 
@@ -242,7 +242,10 @@ getAdminOrders(status, limit)      // GET  /admin/orders        (FASE 15)
 - [x] `paymentController`: el 409 devuelve `sqlMessage` (antes exponía SQL y parámetros)
 
 ### Criterios de aceptación — ✅ verificados contra el backend local
-- [x] Barista con `pos` puede editar una orden **pausada** (200) y recibe **409** si está `enviada`
+- [x] Barista con `pos` edita la **cabecera** de una orden `enviada` (200, regla H)
+      y su intento de **reemplazar ítems** devuelve **409** *"Solo se pueden
+      reemplazar los items de una orden pausada"* (verificado en `test_d` D12 y
+      `test_h` H12/H13; re-confirmado el 2026-09-30 tras el ajuste de FASE 15 E.0)
 - [x] Administrador puede editar una orden `enviada`/`preparando` (200)
 - [x] Cajero (sin `kds`) recibe **403** en `GET /api/kds/orders`
 - [x] Transición inválida → **409** con el mensaje del `SIGNAL`
@@ -490,15 +493,71 @@ LIMIT 20
 
 ## Sub-fase G — Verificación y documentación
 
-- [ ] `node --check back-end/src/controllers/*.js back-end/src/routes/*.js`
-- [ ] `pnpm build` + `pnpm exec oxlint` en `front-end` (sin errores nuevos)
-- [ ] Revisión estática de los SQL (conteos, FKs, ASCII/sin BOM) — **sin ejecutar SQL**
-- [ ] Prueba manual del flujo completo:
+### G.1 Verificación automatizada ✅ (2026-09-30)
+
+- [x] `node --check back-end/src/controllers/*.js back-end/src/routes/*.js` → **35/35**
+- [x] `pnpm build` + `pnpm exec oxlint` en `front-end` → **0** errores
+- [x] Revisión estática de los SQL (sin BOM, sin contenido no-ASCII nuevo,
+      `DELIMITER` balanceados, **sin** `DROP TABLE`/`DELETE`/`TRUNCATE`/
+      `DROP COLUMN`/`MODIFY COLUMN`) — sin ejecutar SQL destructivo
+- [x] Batería completa contra el backend local:
+
+  | Prueba | Resultado |
+  |--------|-----------|
+  | `test_d` — flujo POS → KDS → cobro | **18/18** |
+  | `test_h` — agregar ítems a ordenes en curso | **26/26** |
+  | `test_e` — edición del admin (FASE 15 E) | **21/21** |
+  | `test_e_modal` — payload del `OrderEditModal` | **17/17** |
+  | `test_f` — Caja (F.3) | **15/15** |
+  | `test_f1_api` — Dashboard (F.1) | **13/13** |
+  | SSR front-end | **8/8** (E) + **4/4** (F) |
+
+- [x] BD sin restos de pruebas: solo órdenes reales, 0 ítems/pagos/movimientos
+      huérfanos.
+
+### G.2 Impacto en datos existentes (despliegue sobre la BD de la empresa)
+
+**Nada de lo agregado en FASE 05/15 borra ni reescribe datos ya cargados.**
+
+| Qué cambia | Cómo | Efecto sobre datos existentes |
+|------------|------|-------------------------------|
+| Migración `018_kds_cocina.sql` | `ADD COLUMN ... NULL`, `CREATE INDEX ... IF NOT EXISTS`, `ADD CONSTRAINT ... IF NOT EXISTS` | **Aditivo**: `orders` gana `sent_at`, `started_at`, `ready_at`, `completed_at`, `updated_by`; `order_items` gana `sent`, `sent_at`, `prepared_at`. En el histórico quedan `NULL`/`0`. **No toca** productos, categorías, precios, inventario, pagos, movimientos de turno ni el resto de las órdenes. |
+| Migración `019_editar_ordenes_activas.sql` | `DROP PROCEDURE IF EXISTS` + `CREATE` | Solo reemplaza la **lógica** de `sp_send_to_kitchen`; ninguna fila se modifica. |
+| SP corregidos en A.3 (`006`, `007`, `011`) | `DROP PROCEDURE IF EXISTS` + `CREATE` | Lógica únicamente. Único cambio de regla sobre escrituras nuevas: `sp_record_payment` ya **no** cobra órdenes `pausada` (solo `lista`/`completada`). **Los pagos ya registrados quedan intactos.** |
+| Índices nuevos (`idx_orders_kds`, `fk_orders_updated_by`) | `CREATE INDEX` | Solo lectura: aceleran el polling del KDS/Dashboard. |
+| Código (`orderController`, `reportController`, front-end) | — | Sin migración de datos. `/ordenes` y el Dashboard solo **leen**; la edición solo escribe sobre la orden que se edita. |
+
+Puntos a tener en cuenta:
+
+1. **Órdenes en curso al momento del despliegue:** las columnas nuevas nacen en
+   `NULL`. Si hay órdenes `enviada`/`preparando`/`lista` en ese instante,
+   `order_items.sent` quedará en `0` y el KDS las tratará como *pendientes de
+   enviar*. En la BD de desarrollo había **0 órdenes en curso** (solo terminales),
+   por lo que no hizo falta backfill. Si en producción lo hubiera, aplicar:
+   ```sql
+   UPDATE order_items oi JOIN orders o ON o.id = oi.order_id
+   SET oi.sent = 1, oi.sent_at = o.sent_at
+   WHERE o.status IN ('enviada','preparando','lista','completada','pagada')
+     AND oi.sent = 0;
+   ```
+2. **Histórico con `sent = 0`** (ítems de órdenes ya pagadas/anuladas): es
+   cosmético; esas órdenes no se reabren ni aparecen en el KDS. Solo afectaría
+   si un admin reabre una orden `completada`, caso en el que habría que volver a
+   enviarla a cocina.
+3. **`orders.updated_at`** (usado por el `ORDER BY` del Dashboard) ya existía en
+   el `schema.sql` desde FASE 04, no es una columna nueva.
+4. **Instalaciones nuevas:** `Deploy/{Produccion,Test}/schema.sql` ya incluyen
+   las columnas nuevas, así que 018 no hace falta ahí.
+
+### G.3 Pendiente
+
+- [ ] Prueba manual del flujo completo (la realiza el cliente):
       `pausar → enviar → Preparar → Listo → cobrar` + edición admin (FASE 15) + anulación
-- [ ] Prueba de permisos: anular exige módulo `pos` (Cajero/Barista ✓, 2026-09-29);
-      la pantalla `/kds` sigue exigiendo `kds`; Barista edita solo `pausada`
+- [ ] Prueba de permisos en navegador: anular exige módulo `pos`; la pantalla
+      `/kds` sigue exigiendo `kds`; Barista/Cajero no ven `/ordenes`
 - [ ] Actualizar `documentacion/README.md`, FASE 05 y FASE 15 a **✅ Completada**
-- [ ] Actualizar `documentacion/ManualDeUsuario.md` (flujo de cocina y cobro)
+      (después de la prueba manual)
+- [ ] Actualizar `documentacion/ManualDeUsuario.md` (flujo de cocina y cobro + `/ordenes`)
 
 ---
 

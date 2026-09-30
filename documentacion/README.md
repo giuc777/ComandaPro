@@ -12,7 +12,7 @@
 | [FASE 02B](fases/FASE_02B_catalogos.md) | Sistema de Catálogos | ✅ Completada | FASE 01 |
 | [FASE 03](fases/FASE_03_modificadores.md) | Sistema de Modificadores | ✅ Completada | FASE 02 |
 | [FASE 04](fases/FASE_04_ordenes_pos.md) | Órdenes y Terminal POS | ✅ Completada | FASE 02, 03 |
-| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System (implementación) | 🔄 En curso (A-D + H + F.3 + F.1/F.2 ✅ · G pendiente) | FASE 04, 06 |
+| [FASE 05](fases/FASE_05_kds_cocina.md) | Kitchen Display System (implementación) | 🔄 En curso (A-D + H + F.3 + F.1/F.2 + G.1/G.2 ✅ · prueba manual pendiente) | FASE 04, 06 |
 | [FASE 06](fases/FASE_06_pagos_recibos.md) | Pagos y Recibos | ✅ Completada | FASE 04 |
 | [FASE 07](fases/FASE_07_inventario_recetas.md) | Inventario y Recetas | ✅ Completada | FASE 02, 04, 06 |
 | [FASE 08](fases/FASE_08_proveedores.md) | Proveedores | ✅ Completada | FASE 07 |
@@ -40,7 +40,7 @@ Fase 1 (Auth)
              │
              └──→ Fase 4 (Órdenes POS) ✅
                       │
-                        ├──→ Fase 5 (KDS) 🔄 A-D + H + F.3 + F.1/F.2 ✅ · G pendiente
+                        ├──→ Fase 5 (KDS) 🔄 A-D + H + F.3 + F.1/F.2 + G.1/G.2 ✅ · manual pendiente
                        │        │
                        │        └──→ Fase 15 (Órdenes del Admin) ✅ A-B + E
                        ├──→ Fase 6 (Pagos) ✅
@@ -72,7 +72,9 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > C (pantalla KDS), **D (POS: enviar a cocina)**, **H (agregar ítems a ordenes en
 > curso)**, **F.3 (pantalla de cobro en Caja)**, **E (pantalla `/ordenes` del
 > admin, FASE 15)** y **F.1/F.2 (Dashboard)** ya están aplicadas y verificadas;
-> falta **G** (verificación final) — ver [FASE_05](fases/FASE_05_kds_cocina.md)
+> la verificación automatizada (**G.1**) y el análisis de impacto en datos
+> (**G.2**) también; solo faltan la **prueba manual** y el cierre documental
+> (**G.3**) — ver [FASE_05](fases/FASE_05_kds_cocina.md)
 > y [FASE_15](fases/FASE_15_ordenes_admin.md).
 >
 > **Estado actual del flujo:** la máquina de estados y la regla de cobro **ya están
@@ -95,8 +97,18 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > **F.1/F.2** el Dashboard muestra las órdenes en los 4 estados activos (hasta 20,
 > ordenadas por última actualización), se refresca solo cada 15 s, conserva los
 > datos si falla la carga y da acceso directo a **/ordenes** (admin) y al KDS.
-> Pendiente: **G** (verificación final). El flujo anterior
+> Pendiente: **G.3** (prueba manual y cierre de FASE 05/15). El flujo anterior
 > de "pausar y cobrar manualmente" sigue documentado en FASE_04 hasta F y G.
+>
+> **Nota (impacto en datos existentes):** todo lo agregado por FASE 05/15 es
+> **aditivo**: las migraciones 018/019 solo hacen `ADD COLUMN`/`ADD INDEX`/`ADD
+> CONSTRAINT` (nullable) y `DROP/CREATE PROCEDURE`. **No** hay `DROP TABLE`,
+> `DELETE`, `TRUNCATE`, `DROP COLUMN` ni `MODIFY COLUMN`, así que productos,
+> precios, inventario, pagos, movimientos de turno y órdenes ya cargadas quedan
+> intactos; las columnas nuevas valen `NULL`/`0` en el histórico. Los únicos
+> cambios son de **lógica para escrituras futuras** (p. ej. `sp_record_payment`
+> ya no cobra órdenes `pausada`). Detalle y script de backfill opcional en
+> [FASE_05 → G.2](fases/FASE_05_kds_cocina.md).
 
 > **Nota (limpieza de catálogos):** Los grupos `menu_cafe` y `proveedores` fueron
 > retirados (soft-delete) por duplicar `products` y `suppliers` respectivamente.

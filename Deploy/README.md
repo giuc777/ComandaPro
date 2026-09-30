@@ -473,6 +473,11 @@ sudo ufw enable
 
 ## 13. Actualizaciones
 
+> **Guia paso a paso:** [`Produccion/actualizacion.md`](Produccion/actualizacion.md)
+> (actualizacion incremental desde la version con migracion 017: KDS, `/ordenes`,
+> Dashboard y cobro). Incluye verificacion previa, backup, orden de archivos,
+> backfill opcional y rollback.
+
 ```bash
 cd ~/desarrollo
 git pull
@@ -491,7 +496,8 @@ cd ../front-end && pnpm install && pnpm build
 
 > Los archivos `schema.sql` incluyen `DROP TABLE`, por lo que **recrean** las
 > tablas y borran datos. Para actualizar una base en produccion usa migraciones
-> incrementales, no el `schema.sql`.
+> incrementales, no el `schema.sql`. **Tampoco se ejecuta `seed.sql`** sobre una
+> base con datos (inserta usuarios y productos con IDs fijos).
 
 ---
 

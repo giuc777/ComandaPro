@@ -269,8 +269,11 @@ export function createOrderController(pool) {
                 if (currentStatus === 'pagada' || currentStatus === 'anulada') {
                     return res.status(409).json({ error: 'No se puede editar una orden pagada o anulada' });
                 }
-                if (req.user?.role !== 'Administrador' && currentStatus !== 'pausada') {
-                    return res.status(403).json({ error: 'Solo un administrador puede editar una orden activa' });
+                // Cabecera (sin items): editable por cualquier rol con modulo pos en
+                // cualquier estado no pagado (regla de la sub-fase H).
+                // Reemplazo de items: solo Administrador, o cualquier rol si esta pausada.
+                if (Array.isArray(items) && req.user?.role !== 'Administrador' && currentStatus !== 'pausada') {
+                    return res.status(409).json({ error: 'Solo se pueden reemplazar los items de una orden pausada' });
                 }
 
                 conn = await pool.getConnection();
@@ -288,6 +291,10 @@ export function createOrderController(pool) {
                 if (lockedStatus === 'pagada' || lockedStatus === 'anulada') {
                     await conn.rollback();
                     return res.status(409).json({ error: 'Estado no editable' });
+                }
+                if (Array.isArray(items) && req.user?.role !== 'Administrador' && lockedStatus !== 'pausada') {
+                    await conn.rollback();
+                    return res.status(409).json({ error: 'Solo se pueden reemplazar los items de una orden pausada' });
                 }
 
                 await conn.query(
