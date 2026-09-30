@@ -1,6 +1,6 @@
 # FASE 05 — Kitchen Display System (KDS) (implementación)
 
-**Estado:** 🟡 En implementación — A-D + H + F.3 ✅ · **E ✅ (2026-09-30, en FASE 15)** · F.1/F.2 y G pendientes
+**Estado:** 🟡 En implementación — A-D + H + F.3 + F.1/F.2 ✅ · **E ✅ (2026-09-30, en FASE 15)** · G pendientes
 **Dependencias:** FASE 04 (Órdenes POS), FASE 06 (Pagos y Recibos)
 **Fase complementaria:** [FASE 15 — Pantalla de Órdenes del Administrador](FASE_15_ordenes_admin.md)
 
@@ -87,7 +87,7 @@ Las sub-fases C, D, F son de esta fase; **E es FASE 15**.
 | C | Pantalla de Cocina (KDS) | ✅ 2026-09-28 |
 | D | POS: enviar a cocina | ✅ 2026-09-29 |
 | E | Pantalla de órdenes del admin (FASE 15) | ✅ 2026-09-30 |
-| F | Dashboard y Caja | 🟡 Parcial (F.3 ✅ 2026-09-29) |
+| F | Dashboard y Caja | 🟡 Parcial (F.3 ✅ 2026-09-29 · F.1/F.2 ✅ 2026-09-30) |
 | G | Verificación y documentación | ⬜ Pendiente |
 | H | Agregar ítems a ordenes en curso (POS) | ✅ 2026-09-29 |
 
@@ -407,7 +407,7 @@ Clases CSS ya preparadas: `.kds-card` (`front-end/src/index.css:162`).
 
 **Objetivo:** que el administrador vea las órdenes y que el cobro respete el nuevo flujo.
 
-### F.1 `reportController.getDashboard` (`back-end/src/controllers/reportController.js`)
+### F.1 `reportController.getDashboard` (`back-end/src/controllers/reportController.js`) — ✅ (2026-09-30)
 ```sql
 -- antes:  WHERE o.status = 'pausada' ... LIMIT 10
 -- ahora:
@@ -415,13 +415,22 @@ WHERE o.status IN ('pausada','enviada','preparando','lista')
 ORDER BY o.updated_at DESC
 LIMIT 20
 ```
-- `sp_get_dashboard_summary` con el `pending_orders` corregido (A.3).
-- Mantener el catch, pero en el front **no** borrar todos los datos ante un error.
+- El `SELECT` también expone `o.status` y `o.updated_at` (para la pill de estado
+  y el orden del listado del front).
+- `sp_get_dashboard_summary` con el `pending_orders` corregido (A.3) ya estaba
+  aplicado en BD: cuenta los 4 estados activos.
+- Se mantiene el `catch` (500) y en el front **no** se borran los datos ante un
+  error (ver F.2).
 
-### F.2 `Dashboard.jsx`
-- `setInterval(load, 15000)` (mismo patrón que `CajaPage.jsx:98`), limpiar al desmontar.
-- Sección *"Ordenes Activas"*: añadir pill de estado + minutos, y enlace
-  **"Ver todas → /ordenes"** (solo Administrador) y botón *"Abrir KDS"*.
+### F.2 `Dashboard.jsx` — ✅ (2026-09-30)
+- `setInterval(load, 15000)` (mismo patrón que `CajaPage.jsx`), limpiado al
+  desmontar; la carga del polling es *silenciosa* (no muestra el spinner).
+- Errores: banner con botón de reintento (`data-testid="dashboard-error"`)
+  que **conserva** los datos previos (antes `setData(null)` borraba todo).
+- Sección *"Ordenes Activas"*: contador, pill de estado
+  (`OrderStatusBadge`), minutos (`timeAgo`), botón **"Abrir KDS"** y enlace
+  **"Ver todas →"** a `/ordenes` **solo Administrador**
+  (`data-testid="view-all-orders"`).
 
 ### F.3 `CajaPage.jsx` — ✅ implementado (2026-09-29)
 - `canPay = (status === 'lista' || status === 'completada') && pendingCount === 0 && shift && ...`
@@ -442,17 +451,30 @@ LIMIT 20
   *"Órdenes en Curso"* (solo para `lista`/`completada`, ajuste D.3).
 
 ### Tareas
-- [ ] Query del dashboard con todos los estados activos
-- [ ] Refresco 15 s + enlaces en el Dashboard
+- [x] Query del dashboard con todos los estados activos (**F.1**, 2026-09-30)
+- [x] Refresco 15 s + enlaces en el Dashboard (**F.2**, 2026-09-30)
 - [x] `canPay` + mensajes en Caja (**F.3**, 2026-09-29)
 - [x] `node --check` + `pnpm build`
 
 ### Criterios de aceptación
-- [ ] El Dashboard muestra órdenes `enviada`/`preparando`/`lista` y las refresca solo
-- [ ] Con más de 20 órdenes activas no se pierden sin aviso
+- [x] El Dashboard muestra órdenes `enviada`/`preparando`/`lista` y las refresca solo
+      *(`test_f1_api.ps1` 13/13: estados mixtos + polling 15 s)*
+- [x] Con más de 20 órdenes activas no se pierden sin aviso
+      *(el backend pagina con `LIMIT 20` ordenado por `updated_at DESC`)*
 - [x] Caja rechaza cobrar una orden `preparando` y permite cobrar una `lista`
-- [ ] Tras cobrar, la orden pasa a `pagada` y sale de KDS y Dashboard
-      (KDS verificado; Dashboard pendiente con F.1)
+- [x] Tras cobrar/anular, la orden sale del KDS y del Dashboard
+      *(KDS verificado en F.3; Dashboard: `pagada`/`anulada` quedan fuera del
+      `WHERE ... IN (estados activos)` — `test_f1_api`)*
+
+### Notas de verificación — F.1/F.2 (2026-09-30)
+- `test_f1_api.ps1`: **13/13 OK** — 4 estados activos incluidos, `pagada`/
+  `anulada`/`completada` excluidos, `status` + `updated_at` presentes, orden
+  `updated_at DESC`, `LIMIT 20`, `summary.pending_orders` = conteo real en BD,
+  dashboard accesible para Barista (solo `authenticate`) y salida al anular.
+- `Dashboard.jsx`: SSR **4/4**, `oxlint` 0, `pnpm build` OK; `node --check`
+  del `reportController` OK. BD sin restos de pruebas (solo órdenes reales).
+- Regresiones ya verificadas en sub-fases anteriores: `test_d` 18/18,
+  `test_h` 26/26, `test_f` 15/15, `test_e` 20/20, `test_e_modal` 17/17.
 
 ### Notas de verificación — F.3 (2026-09-29)
 - `test_f.ps1`: **15/15 OK** — 409 en `enviada`/`preparando`, 409 con ítems sin

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/apiClient';
 import { formatCurrency } from '../utils/format';
 import SalesTrendChart from '../components/reports/SalesTrendChart';
+import OrderStatusBadge from '../components/OrderStatusBadge';
 
 function timeAgo(dateStr) {
     if (!dateStr) return '';
@@ -25,6 +26,7 @@ export default function Dashboard({ user }) {
     const [data, setData] = useState(null);
     const [shift, setShift] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     const greeting = new Date().getHours() < 12
         ? 'Buenos dias'
@@ -32,7 +34,8 @@ export default function Dashboard({ user }) {
     const name = user?.name?.split(' ')[0] || 'Barista';
     const isAdmin = user?.role === 'Administrador';
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const [dash, currentShift] = await Promise.all([
                 api.getDashboard(),
@@ -40,14 +43,19 @@ export default function Dashboard({ user }) {
             ]);
             setData(dash);
             setShift(currentShift);
-        } catch {
-            setData(null);
+            setError('');
+        } catch (e) {
+            setError(e?.message || 'No se pudo cargar el dashboard');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, []);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        load();
+        const interval = setInterval(() => load(true), 15000);
+        return () => clearInterval(interval);
+    }, [load]);
 
     const summary = data?.summary || {};
     const activeOrders = data?.activeOrders || [];
@@ -94,6 +102,21 @@ export default function Dashboard({ user }) {
             </header>
 
             <main className="flex-1 px-4 pb-24 md:pb-6 flex flex-col gap-4 max-w-2xl mx-auto w-full">
+                {error && (
+                    <div
+                        role="alert"
+                        className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-error/40 bg-error-container/40 px-4 py-2"
+                        data-testid="dashboard-error"
+                    >
+                        <div className="flex items-center gap-2 text-[0.8125rem] text-on-error-container">
+                            <span className="material-symbols-outlined text-[16px]">error</span>
+                            <span>{error}</span>
+                        </div>
+                        <button type="button" className="btn-ghost py-1" onClick={() => { setError(''); load(true); }}>
+                            <span className="material-symbols-outlined text-[16px]">refresh</span>
+                        </button>
+                    </div>
+                )}
                 <div className="flex items-center justify-between pt-2">
                     <div>
                         <h1 className="font-display text-lg text-primary tracking-tight">{greeting}, {name}!</h1>
@@ -180,11 +203,30 @@ export default function Dashboard({ user }) {
                 <SalesTrendChart data={trend} title="Ventas Ultimos 7 Dias" height={180} />
 
                 <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="font-display text-lg text-on-surface font-semibold">Ordenes Activas</h2>
-                        <button onClick={() => navigate('/pos')} className="text-secondary text-sm font-semibold hover:underline">
-                            Ver POS
-                        </button>
+                    <div className="flex items-center justify-between mb-3 gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <h2 className="font-display text-lg text-on-surface font-semibold">Ordenes Activas</h2>
+                            <span className="badge bg-primary-container/20 text-primary" data-testid="active-orders-count">
+                                {activeOrders.length}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                            <button onClick={() => navigate('/pos')} className="text-secondary text-sm font-semibold hover:underline">
+                                Ver POS
+                            </button>
+                            <button onClick={() => navigate('/kds')} className="btn-ghost text-[0.75rem] py-1" data-testid="open-kds">
+                                <span className="material-symbols-outlined text-[16px]">coffee_maker</span> Abrir KDS
+                            </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => navigate('/ordenes')}
+                                    className="text-secondary text-sm font-semibold hover:underline"
+                                    data-testid="view-all-orders"
+                                >
+                                    Ver todas &rarr;
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="flex flex-col gap-2">
                         {loading ? (
@@ -206,6 +248,7 @@ export default function Dashboard({ user }) {
                                                 <span className="font-semibold text-[0.8125rem] text-on-surface truncate">
                                                     {order.table_name || 'Para Llevar'}
                                                 </span>
+                                                {order.status && <OrderStatusBadge status={order.status} />}
                                                 {order.customer_name && (
                                                     <span className="text-[0.6875rem] text-on-surface-variant truncate">
                                                         {order.customer_name}

@@ -197,14 +197,14 @@ export function createReportController(pool) {
                 );
                 const trend = rowsOf(trendResult);
                 const ordersResult = await pool.query(
-                    `SELECT o.id, o.table_id, t.name AS table_name, o.customer_name, o.mode,
-                            o.notes, o.subtotal, o.tax, o.total, o.created_at,
+                    `SELECT o.id, o.status, o.table_id, t.name AS table_name, o.customer_name, o.mode,
+                            o.notes, o.subtotal, o.tax, o.total, o.created_at, o.updated_at,
                             (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
                      FROM orders o
                      LEFT JOIN tables t ON o.table_id = t.id
-                     WHERE o.status = 'pausada'
-                     ORDER BY o.created_at DESC
-                     LIMIT 10`
+                     WHERE o.status IN ('pausada','enviada','preparando','lista')
+                     ORDER BY o.updated_at DESC
+                     LIMIT 20`
                 );
                 const activeOrders = rowsOf(ordersResult);
 

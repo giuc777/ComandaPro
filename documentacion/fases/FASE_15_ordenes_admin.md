@@ -248,7 +248,7 @@ normaliza.
   3. Cocina marca `lista` → admin la ve → la caja la cobra
   4. Orden `pagada` → botón Editar en solo lectura / 409 ✅ (API)
   5. Usuario no-admin en `/ordenes` → redirigido ✅ (`adminOnly` → 403 en API)
-- [ ] Pasar este documento y FASE 05 a **✅ Completada** (tras F.1/F.2 y G)
+- [ ] Pasar este documento y FASE 05 a **✅ Completada** (tras G)
 
 ---
 
