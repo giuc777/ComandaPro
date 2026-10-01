@@ -50,8 +50,36 @@ export function createUserRouter(userController, tokenService) {
      *   put:
      *     tags: [Users]
      *     summary: Actualizar usuario (admin)
+     *     description: Actualizacion parcial; el username se renombra solo si se envia.
      *     security:
      *       - bearerAuth: []
+     *     parameters:
+     *       - in: path
+     *         name: id
+     *         required: true
+     *         schema:
+     *           type: integer
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               username: { type: string, maxLength: 50, description: Nombre de usuario unico, sin espacios }
+     *               name: { type: string }
+     *               email: { type: string }
+     *               role: { type: string, enum: [Administrador, Barista, Cajero] }
+     *               active: { type: boolean }
+     *     responses:
+     *       200:
+     *         description: Usuario actualizado
+     *       400:
+     *         description: Username vacio, con espacios o demasiado largo
+     *       404:
+     *         description: Usuario no encontrado
+     *       409:
+     *         description: El username ya existe
      */
     router.put('/:id', authenticate(tokenService), adminOnly, (req, res) => userController.update(req, res));
 

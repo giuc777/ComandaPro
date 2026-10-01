@@ -475,9 +475,9 @@ sudo ufw enable
 
 > **Guia paso a paso:** [`Produccion/actualizacion.md`](Produccion/actualizacion.md)
 > (actualizacion incremental desde la version con migracion 017: KDS, `/ordenes`,
-> Dashboard, cobro, estados de mesa e ingresos/egresos de caja con las
-> migraciones 018, 020 y 021). Incluye verificacion previa, backup, orden de
-> archivos, backfill opcional y rollback.
+> Dashboard, cobro, estados de mesa, ingresos/egresos de caja y renombrar
+> usuario, con las migraciones 018, 020 y 021). Incluye verificacion previa,
+> backup, orden de archivos, backfill opcional y rollback.
 
 ```bash
 cd ~/desarrollo
@@ -487,6 +487,12 @@ git pull
 # mysql -u comandapro_user -p DeerCoffeeDB < Deploy/Produccion/schema.sql  # OJO: recrea tablas
 # Revisa siempre las migraciones nuevas en database/migrations/
 
+# Procedimientos almacenados (paso 4 de actualizacion.md): aplicar siempre que
+# haya toques en database/procedures/ o Deploy/Produccion/sp_*.sql, aunque no
+# haya migraciones nuevas. Este paquete cambia sp_simple.sql (sp_update_user
+# con p_username) y el backend nuevo no funciona sin el.
+# mysql -u comandapro_user -p DeerCoffeeDB < Deploy/Produccion/sp_simple.sql
+
 # Backend
 cd back-end && pnpm install && sudo systemctl restart comandapro-backend
 
@@ -494,6 +500,11 @@ cd back-end && pnpm install && sudo systemctl restart comandapro-backend
 cd ../front-end && pnpm install && pnpm build
 # nginx sirve dist/ directamente; no requiere reinicio
 ```
+
+> **No alcanza con `git pull` + reinicio:** las migraciones y los `sp_*.sql`
+> viven en disco, no en el codigo. Sigue el orden de
+> [`Produccion/actualizacion.md`](Produccion/actualizacion.md): base (§4)
+> **antes** de reiniciar el backend (§6), y verificacion en §7.
 
 > Los archivos `schema.sql` incluyen `DROP TABLE`, por lo que **recrean** las
 > tablas y borran datos. Para actualizar una base en produccion usa migraciones

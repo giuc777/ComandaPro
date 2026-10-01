@@ -749,6 +749,7 @@ END$$
 DROP PROCEDURE IF EXISTS `sp_update_user`$$
 CREATE PROCEDURE `sp_update_user`(
     IN p_id INT,
+    IN p_username VARCHAR(50),
     IN p_name VARCHAR(100),
     IN p_email VARCHAR(100),
     IN p_role ENUM('Administrador', 'Barista', 'Cajero'),
@@ -756,7 +757,8 @@ CREATE PROCEDURE `sp_update_user`(
 )
 BEGIN
     UPDATE users
-    SET name = COALESCE(p_name, name),
+    SET username = COALESCE(NULLIF(TRIM(p_username), ''), username),
+        name = COALESCE(p_name, name),
         email = COALESCE(p_email, email),
         role = COALESCE(p_role, role),
         active = COALESCE(p_active, active)

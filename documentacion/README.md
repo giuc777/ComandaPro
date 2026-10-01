@@ -80,6 +80,14 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > [`021_caja_ingresos_egresos.sql`](../Deploy/Produccion/migrations/021_caja_ingresos_egresos.sql)
 > — ver [FASE_10](fases/FASE_10_turnos_caja.md) §8.
 
+> **Nota (usuarios):** desde **Usuarios** (admin) ya se puede **renombrar el
+> nombre de usuario**: va en el modal *Editar Usuario* (único, sin espacios,
+> máx. 50; duplicado → **409**). No requiere migración de esquema, solo el SP
+> `sp_update_user` con `p_username` (6 argumentos) — ver
+> [FASE_14](fases/FASE_14_usuarios_permisos.md) y el paso 4 de
+> [`Deploy/Produccion/actualizacion.md`](../Deploy/Produccion/actualizacion.md).
+> El borrado sigue siendo **desactivación** (`sp_set_user_active`).
+
 > **Nota (plan de cocina y órdenes):** Fase 5 (KDS) y Fase 15 (Órdenes del
 > Administrador) están **en implementación por sub-fases**: A (datos), B (backend),
 > C (pantalla KDS), **D (POS: enviar a cocina)**, **H (agregar ítems a ordenes en

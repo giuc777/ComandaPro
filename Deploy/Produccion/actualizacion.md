@@ -16,7 +16,7 @@ Dashboard y cobro en Caja).
 
 | Version en produccion | Hasta `c7bc14b` (incluye la migracion 017 de menu) |
 |-----------------------|-----------------------------------------------------|
-| Se agrega             | FASE 05 (KDS cocina, D/H/F.3), FASE 15 (`/ordenes`), F.1/F.2 (Dashboard), FASE 09 (mesas: dos estados + cambio manual), FASE 10 §8 (caja: ingresos y egresos manuales) |
+| Se agrega             | FASE 05 (KDS cocina, D/H/F.3), FASE 15 (`/ordenes`), F.1/F.2 (Dashboard), FASE 09 (mesas: dos estados + cambio manual), FASE 10 §8 (caja: ingresos y egresos manuales), FASE 14 (renombrar usuario) |
 | Migracion nueva       | `migrations/018_kds_cocina.sql`, `migrations/020_mesa_libre_ocupada.sql`, `migrations/021_caja_ingresos_egresos.sql` |
 | Procedimientos        | `sp_simple.sql`, `sp_transaccionales.sql`, `sp_lectura.sql` |
 | Codigo                | backend (`pnpm install`) + frontend (`pnpm build`) |
@@ -27,7 +27,9 @@ Si el backend nuevo arranca con la base vieja, el KDS y `/ordenes` fallan con
 endpoint `PUT /api/tables/:id/status` falla con
 `PROCEDURE sp_update_table_status does not exist`, y los ingresos/egresos de
 caja fallan con `Unknown column 'concept' in 'field list'` / argumentos de
-`sp_record_shift_transaction` desalineados.
+`sp_record_shift_transaction` desalineados, y el endpoint
+`PUT /api/users/:id` falla con `Incorrect number of arguments` si
+`sp_update_user` quedo sin el nuevo parametro `p_username`.
 
 ---
 
@@ -49,6 +51,9 @@ mysql -u comandapro_user -p -e "
   SELECT COUNT(*) AS cols_caja FROM information_schema.COLUMNS
    WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='shift_transactions'
      AND COLUMN_NAME='concept';
+  SELECT COUNT(*) AS params_sp_update_user FROM information_schema.PARAMETERS
+   WHERE SPECIFIC_SCHEMA='DeerCoffeeDB' AND SPECIFIC_NAME='sp_update_user'
+     AND PARAMETER_NAME IS NOT NULL;
 "
 ```
 
@@ -58,6 +63,9 @@ mysql -u comandapro_user -p -e "
   migracion 020 (situacion normal hasta `c7bc14b`).
 - `shift_transactions.type` sin `'income'`/`'expense'` o `cols_caja = 0` =>
   falta la migracion 021.
+- `params_sp_update_user = 5` => `sp_update_user` **todavia no acepta
+  `p_username`** (situacion normal hasta `c7bc14b`); despues del paso 4 debe
+  dar **6**.
 - `ordenes_activas > 0` => anotar el numero: se usa en el paso 5.
 
 ---
@@ -107,7 +115,7 @@ mysql -u comandapro_user -p DeerCoffeeDB < sp_lectura.sql
 | 1 | `migrations/018_kds_cocina.sql` | 8 columnas nuevas (`orders.sent_at/started_at/ready_at/completed_at/updated_by`, `order_items.sent/sent_at/prepared_at`) + indice `idx_orders_kds` + FK `fk_orders_updated_by` | Aditivo (`ADD COLUMN IF NOT EXISTS`), no toca filas existentes |
 | 2 | `migrations/020_mesa_libre_ocupada.sql` | Mesa con **dos estados**: sanea `dirty -> free` y mesas `occupied` sin orden activa, y reduce el ENUM a `enum('free','occupied')` | Aditivo sobre `tables`, solo afecta filas de mesas |
 | 3 | `migrations/021_caja_ingresos_egresos.sql` | Caja: columna `shift_transactions.concept` (VARCHAR 120) y ENUM ampliado a `('sale','refund','void','income','expense')` | Aditivo; no cambia filas existentes |
-| 4 | `sp_simple.sql` | Cabecera editable en cualquier estado no pagado (regla H), `sp_void_order` **libera la mesa** y `sp_reopen_order` **sincroniza mesas** al cambiar `table_id` (409 si la destino esta ocupada); `sp_close_shift` descuenta egresos en el efectivo esperado y `sp_record_shift_transaction` valida ingresos/egresos manuales | Solo procedimientos |
+| 4 | `sp_simple.sql` | Cabecera editable en cualquier estado no pagado (regla H), `sp_void_order` **libera la mesa** y `sp_reopen_order` **sincroniza mesas** al cambiar `table_id` (409 si la destino esta ocupada); `sp_close_shift` descuenta egresos en el efectivo esperado y `sp_record_shift_transaction` valida ingresos/egresos manuales; `sp_update_user` renombra el username (`p_username`) | Solo procedimientos |
 | 5 | `sp_transaccionales.sql` | `sp_create_parked_order` (409 si la mesa esta ocupada), `sp_record_payment` (libera la mesa en `free`), `sp_update_table_status` (cambio manual), `sp_send_to_kitchen`, `sp_update_order_status`, `sp_add_order_item` | Solo procedimientos |
 | 6 | `sp_lectura.sql` | **Nuevos** `sp_get_kds_orders` y `sp_get_orders_admin` + dashboard con los 4 estados activos + `concept`/ingresos/egresos en las lecturas de caja | Solo procedimientos |
 
@@ -183,6 +191,12 @@ mysql -u comandapro_user -p -e "
   SELECT COLUMN_NAME FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='shift_transactions' AND COLUMN_NAME='concept';"
 
+# sp_update_user acepta el nuevo p_username (debe listar 6 parametros)
+mysql -u comandapro_user -p -e "
+  SELECT ORDINAL_POSITION, PARAMETER_NAME FROM information_schema.PARAMETERS
+  WHERE SPECIFIC_SCHEMA='DeerCoffeeDB' AND SPECIFIC_NAME='sp_update_user'
+    AND PARAMETER_NAME IS NOT NULL ORDER BY ORDINAL_POSITION;"
+
 # Los conteos del paso 2 deben ser IDENTICOS (productos/pagos/movimientos/ordenes/items)
 mysql -u comandapro_user -p DeerCoffeeDB -e "
   SELECT (SELECT COUNT(*) FROM products) AS productos,
@@ -204,6 +218,9 @@ Prueba manual en la app:
    (compra de ingredientes, efectivo) quedan en *Movimientos del turno*, suben/
    bajan los indicadores y el **Efectivo esperado** del arqueo; un egreso en
    tarjeta devuelve **400**.
+7. Usuarios: en **Editar** renombrar un usuario (otro distinto, nunca el
+   propio) -> la fila refleja el username nuevo y se puede entrar con el; el
+   mismo username ya usado devuelve **409** y uno con espacios **400**.
 
 ---
 
@@ -218,6 +235,7 @@ Prueba manual en la app:
 | Mesa con 3 estados (`free`/`occupied`/`dirty`): al cobrar quedaba `dirty` para siempre | **Dos estados**: al cobrar o anular la mesa vuelve a `free`; cambio manual desde el selector de mesas y desde Catálogos (409 si hay orden activa) |
 | Mover una orden de mesa no sincronizaba los estados | `sp_reopen_order` libera la origen y ocupa la destino; crea/mover a una mesa con otra orden activa -> **409** |
 | La caja solo tenia ventas | Ingresos y egresos manuales (propina, retiro para compras) con concepto obligatorio: se registran en `shift_transactions` (`income`/`expense`) y ajustan el efectivo esperado del arqueo |
+| No se podia cambiar el nombre de usuario | El modal **Editar Usuario** incluye **Username**: se renombra desde ahi (unico, sin espacios, max 50); duplicado -> **409** |
 
 **No cambian:** productos, precios, inventario, proveedores, pagos, turnos,
 movimientos de caja ni ordenes ya registradas. La unica data que toca la 020
@@ -265,6 +283,13 @@ cd back-end && pnpm install && sudo systemctl start comandapro-backend
 > con el codigo, o volver a aplicar el `sp_close_shift` /
 > `sp_record_shift_transaction` anteriores.
 
+> **Atencion con `sp_update_user`:** la firma nueva tiene **6** argumentos
+> (agrego `p_username`). El codigo y el SP deben ir juntos: backend nuevo con
+> SP viejo (5 argumentos) hace fallar **`PUT /api/users/:id`** con
+> `Incorrect number of arguments`, y backend viejo con SP nuevo da el mismo
+> error. Si se revierte solo el codigo, restaurar el respaldo del paso 2 (que
+> trae la firma de 5) o volver a aplicar el `sp_update_user` anterior.
+
 ---
 
 ## 10. Resumen en 6 lineas
@@ -275,5 +300,5 @@ cd back-end && pnpm install && sudo systemctl start comandapro-backend
 3. 018 + 020 + 021 + sp_simple + sp_transaccionales + sp_lectura   (base, antes de reiniciar)
 4. backfill de sent SOLO si hay ordenes activas
 5. pnpm build + restart backend
-6. health + conteos identicos + prueba de kds/ordenes/cobro/mesas/caja
+6. health + conteos identicos + prueba de kds/ordenes/cobro/mesas/caja/renombrar usuario
 ```

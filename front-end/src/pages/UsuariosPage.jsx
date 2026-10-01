@@ -28,7 +28,7 @@ export default function UsuariosPage({ user }) {
     const [selectedUser, setSelectedUser] = useState(null);
 
     const [newUser, setNewUser] = useState({ username: '', password: '', name: '', email: '', role: 'Barista' });
-    const [editUser, setEditUser] = useState({ name: '', email: '', role: '' });
+    const [editUser, setEditUser] = useState({ username: '', name: '', email: '', role: '' });
     const [newPassword, setNewPassword] = useState('');
     const [formMsg, setFormMsg] = useState(null);
     const { confirm, confirmModal } = useConfirm();
@@ -78,8 +78,11 @@ export default function UsuariosPage({ user }) {
     const handleEdit = async (e) => {
         e.preventDefault();
         setFormMsg(null);
+        const username = (editUser.username || '').trim();
+        if (!username) { setFormMsg({ type: 'error', text: 'Nombre de usuario requerido' }); return; }
+        if (/\s/.test(username)) { setFormMsg({ type: 'error', text: 'El nombre de usuario no puede contener espacios' }); return; }
         try {
-            const result = await api.updateUser(selectedUser.id, editUser);
+            const result = await api.updateUser(selectedUser.id, { ...editUser, username });
             if (result.error) { setFormMsg({ type: 'error', text: result.error }); return; }
             setShowEditModal(false);
             loadData();
@@ -134,7 +137,7 @@ export default function UsuariosPage({ user }) {
 
     const openEdit = (u) => {
         setSelectedUser(u);
-        setEditUser({ name: u.name, email: u.email || '', role: u.role });
+        setEditUser({ username: u.username, name: u.name, email: u.email || '', role: u.role });
         setFormMsg(null);
         setShowEditModal(true);
     };
@@ -324,6 +327,10 @@ export default function UsuariosPage({ user }) {
                     <div className="modal-content max-w-md w-[calc(100vw-2rem)]" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display text-lg text-on-surface font-semibold mb-3">Editar Usuario</h3>
                         <form onSubmit={handleEdit} className="flex flex-col gap-3">
+                            <div>
+                                <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider text-[0.6875rem]">Username</label>
+                                <input type="text" className="input-field" value={editUser.username || ''} onChange={e => setEditUser({ ...editUser, username: e.target.value })} maxLength={50} required />
+                            </div>
                             <div>
                                 <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider text-[0.6875rem]">Nombre</label>
                                 <input type="text" className="input-field" value={editUser.name} onChange={e => setEditUser({ ...editUser, name: e.target.value })} required />

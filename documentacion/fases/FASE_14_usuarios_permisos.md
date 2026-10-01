@@ -47,7 +47,7 @@ Matriz por defecto:
 ### `procedures/013_user_admin_procedures.sql`
 - `sp_list_users_admin` — todos los usuarios (incluye inactivos) con `failed_attempts`, `locked_until`, `is_locked`.
 - `sp_get_user_by_id` — perfil por ID (faltaba; `getProfile` estaba roto).
-- `sp_update_user` — **redefinido** con `COALESCE` para permitir actualizaciones parciales (antes, pasar `NULL` en nombre rompía el `NOT NULL`).
+- `sp_update_user` — **redefinido** con `COALESCE` para permitir actualizaciones parciales (antes, pasar `NULL` en nombre rompía el `NOT NULL`). Acepta `p_username` como 2.º argumento: `COALESCE(NULLIF(TRIM(p_username),''), username)` renombra solo si llega no vacío; la clave única `username` propaga `ER_DUP_ENTRY` (el controller responde 409).
 - `sp_set_user_active` — activar/desactivar.
 - `sp_get_settings`, `sp_update_setting`.
 - `sp_get_role_permissions`, `sp_set_role_permission`, `sp_get_permissions_for_role`.
@@ -56,7 +56,7 @@ Matriz por defecto:
 
 ## Backend
 
-- `userController.js`: corregido el parseo de resultados del driver MariaDB (`rowsOf`/`singleRow`/`toJSON`); nuevos `setPassword` y `unlock`.
+- `userController.js`: corregido el parseo de resultados del driver MariaDB (`rowsOf`/`singleRow`/`toJSON`); nuevos `setPassword` y `unlock`. `update` también renombra el usuario: valida `username` (requerido si llega, ≤50, sin espacios → 400), mapea `ER_DUP_ENTRY` → **409 `El username ya existe`** y pasa 6 argumentos a `sp_update_user`.
 - `settingsController.js` + `routes/settings.js`: `GET /api/settings` (auth), `PUT /api/settings` (admin).
 - `permissionsController.js` + `routes/permissions.js`: `GET /api/permissions` (admin), `GET /api/permissions/me` (auth), `PUT /api/permissions/:role` (admin). Invalida el cache de permisos al actualizar.
 - `middleware/auth.js`: `requireModule(pool, module, { writeOnly })`. Admin siempre pasa; cache de 5 min por rol.
@@ -75,7 +75,7 @@ Matriz por defecto:
 - `components/ModuleRoute.jsx`: guard de ruta por módulo (generaliza `AdminRoute`).
 - `App.jsx`: rutas envueltas en `ModuleRoute` según módulo; nueva ruta `/usuarios`.
 - `Sidebar.jsx` / `MobileNav.jsx`: items con `module`; se muestran según permiso; sucursal dinámica; item admin "Usuarios".
-- `pages/UsuariosPage.jsx` (admin): secciones **Sucursal**, **Usuarios** (crear/editar/activar/desactivar/cambiar contraseña/desbloquear) y **Permisos por rol** (matriz de toggles).
+- `pages/UsuariosPage.jsx` (admin): secciones **Sucursal**, **Usuarios** (crear/editar/renombrar username/activar/desactivar/cambiar contraseña/desbloquear) y **Permisos por rol** (matriz de toggles). El modal **Editar Usuario** incluye el campo **Username** (único, sin espacios, máx. 50).
 - `pages/SettingsPage.jsx`: "Cambiar Contraseña" ahora usa `POST /api/auth/change-password`; se eliminó la tarjeta hardcodeada de usuarios.
 - `pages/LoginPage.jsx`: sucursal dinámica desde `GET /api/settings`.
 - `api/apiClient.js`: métodos `setUserPassword`, `unlockUser`, `changePassword`, `getSettings`, `updateSetting`, `getPermissions`, `updateRolePermissions`, `getMyPermissions`.
@@ -89,6 +89,7 @@ Suite de 26 pruebas con el servidor real (todas OK):
 - Login admin (10 permisos) y barista (5 permisos), sucursal global.
 - Crear usuario (201), duplicado (409), cambiar contraseña + login con la nueva.
 - Update parcial (nombre cambia, email/rol se conservan).
+- Renombrar usuario: 200 y el listado refleja el username nuevo; duplicado → 409; con espacios o vacío → 400; update parcial sin `username` lo conserva; login con el username nuevo (200); el toggle `{active}` sigue funcionando.
 - Desbloquear usuario; desactivar preservando datos; no auto-desactivarse (400).
 - Matriz de permisos (3 roles) y actualización por rol.
 - Settings: leer/actualizar/persistir sucursal.

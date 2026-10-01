@@ -18,10 +18,12 @@ BEGIN
 END //
 
 -- Redefine sp_update_user para permitir actualizaciones parciales
--- (COALESCE conserva el valor actual cuando llega NULL)
+-- (COALESCE conserva el valor actual cuando llega NULL o vacio)
+-- p_username: la clave unica propaga ER_DUP_ENTRY al cliente (-> 409)
 DROP PROCEDURE IF EXISTS sp_update_user //
 CREATE PROCEDURE sp_update_user(
     IN p_id INT,
+    IN p_username VARCHAR(50),
     IN p_name VARCHAR(100),
     IN p_email VARCHAR(100),
     IN p_role ENUM('Administrador', 'Barista', 'Cajero'),
@@ -29,7 +31,8 @@ CREATE PROCEDURE sp_update_user(
 )
 BEGIN
     UPDATE users
-    SET name = COALESCE(p_name, name),
+    SET username = COALESCE(NULLIF(TRIM(p_username), ''), username),
+        name = COALESCE(p_name, name),
         email = COALESCE(p_email, email),
         role = COALESCE(p_role, role),
         active = COALESCE(p_active, active)

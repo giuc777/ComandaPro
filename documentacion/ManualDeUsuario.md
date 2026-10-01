@@ -571,12 +571,17 @@ tres secciones.
   **Email**, **Contraseña** (minimo 8 caracteres) y **Rol** (Barista, Cajero,
   Administrador) -> **Crear**.
 - Por cada fila aparecen las acciones (tooltip):
-  - **Editar** -> modal **Editar Usuario** -> **Guardar**.
+  - **Editar** -> modal **Editar Usuario** (**Username** obligatorio y
+    unico, sin espacios, maximo 50 caracteres; ademas **Nombre**, **Email**
+    y **Rol**) -> **Guardar**. Sirve para renombrar el usuario con el que
+    se inicia sesion.
   - **Cambiar contraseña** -> modal **Cambiar Contraseña** -> **Actualizar**.
   - **Desbloquear**: libera una cuenta bloqueada por intentos fallidos.
   - **Desactivar** / **Activar**: modal **Desactivar usuario** -> boton
     **Desactivar**. No puedes desactivarte a ti mismo.
-- Errores comunes: `El username ya existe`, `La contraseña debe tener al
+- Errores comunes: `El username ya existe`, `Nombre de usuario
+  requerido`, `El nombre de usuario no puede contener espacios`,
+  `La contraseña debe tener al
   menos 8 caracteres`, `No puedes desactivarte a ti mismo`.
 
 ### 13.3 Permisos por Rol

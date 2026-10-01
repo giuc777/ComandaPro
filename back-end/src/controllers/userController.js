@@ -62,14 +62,27 @@ export function createUserController(pool, tokenService) {
         async update(req, res) {
             try {
                 const { id } = req.params;
-                const { name, email, role, active } = req.body;
+                const { username, name, email, role, active } = req.body;
 
+                const usernameParam = username === undefined ? null : String(username).trim();
                 const activeParam = active === undefined ? null : (active ? 1 : 0);
                 const emailParam = email === undefined ? null : email;
 
+                if (usernameParam !== null) {
+                    if (!usernameParam) {
+                        return res.status(400).json({ error: 'Nombre de usuario requerido' });
+                    }
+                    if (usernameParam.length > 50) {
+                        return res.status(400).json({ error: 'El nombre de usuario no puede superar 50 caracteres' });
+                    }
+                    if (/\s/.test(usernameParam)) {
+                        return res.status(400).json({ error: 'El nombre de usuario no puede contener espacios' });
+                    }
+                }
+
                 const [result] = await pool.query(
-                    'CALL sp_update_user(?, ?, ?, ?, ?)',
-                    [id, name || null, emailParam, role || null, activeParam]
+                    'CALL sp_update_user(?, ?, ?, ?, ?, ?)',
+                    [id, usernameParam, name || null, emailParam, role || null, activeParam]
                 );
 
                 const affected = Number(singleRow(result).affected);
@@ -80,6 +93,9 @@ export function createUserController(pool, tokenService) {
 
                 res.json({ success: true });
             } catch (error) {
+                if (error.code === 'ER_DUP_ENTRY') {
+                    return res.status(409).json({ error: 'El username ya existe' });
+                }
                 res.status(500).json({ error: 'Error del servidor' });
             }
         },
