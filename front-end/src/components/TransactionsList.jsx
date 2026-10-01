@@ -4,6 +4,11 @@ const METHOD_META = {
     qr: { label: 'QR', icon: 'qr_code', className: 'bg-secondary/10 text-secondary' }
 };
 
+const MANUAL_META = {
+    income: { label: 'Ingreso', icon: 'add_circle', className: 'bg-tertiary/10 text-tertiary', sign: '+' },
+    expense: { label: 'Egreso', icon: 'remove_circle', className: 'bg-error/10 text-error', sign: '-' }
+};
+
 function formatCurrency(amount) {
     return `Q ${Number(amount || 0).toFixed(2)}`;
 }
@@ -32,12 +37,23 @@ export default function TransactionsList({ transactions = [], loading = false, o
         <div className="flex flex-col gap-2">
             {transactions.map(tx => {
                 const meta = METHOD_META[tx.method] || { label: tx.method, icon: 'receipt', className: 'bg-surface-container text-on-surface-variant' };
+                const manual = MANUAL_META[tx.type];
                 const isVoid = tx.type === 'void';
                 const isRefund = tx.type === 'refund';
-                const label = tx.customer_name || tx.table_name || (tx.order_id ? `Orden #${tx.order_id}` : 'Movimiento manual');
-                const sub = [tx.order_id ? `#${tx.order_id}` : null, tx.table_name, formatTime(tx.created_at)]
-                    .filter(Boolean)
-                    .join(' \u00b7 ');
+                const iconMeta = manual || meta;
+                const label = manual
+                    ? (tx.concept || manual.label)
+                    : (tx.customer_name || tx.table_name || (tx.order_id ? `Orden #${tx.order_id}` : 'Movimiento manual'));
+                const sub = manual
+                    ? [manual.label, formatTime(tx.created_at)].join(' \u00b7 ')
+                    : [tx.order_id ? `#${tx.order_id}` : null, tx.table_name, formatTime(tx.created_at)]
+                        .filter(Boolean)
+                        .join(' \u00b7 ');
+                const amountClass = isVoid
+                    ? 'text-error line-through'
+                    : manual
+                        ? (tx.type === 'income' ? 'text-tertiary' : 'text-error')
+                        : 'text-on-surface';
 
                 return (
                     <button
@@ -45,8 +61,8 @@ export default function TransactionsList({ transactions = [], loading = false, o
                         onClick={() => onSelect && onSelect(tx)}
                         className="flex items-center gap-3 p-3 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors text-left w-full"
                     >
-                        <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.className}`}>
-                            <span className="material-symbols-outlined text-[18px]">{meta.icon}</span>
+                        <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconMeta.className}`}>
+                            <span className="material-symbols-outlined text-[18px]">{iconMeta.icon}</span>
                         </span>
                         <div className="min-w-0 flex-1">
                             <p className="text-[0.8125rem] font-semibold text-on-surface truncate">{label}</p>
@@ -56,11 +72,11 @@ export default function TransactionsList({ transactions = [], loading = false, o
                             </p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                            <p className={`text-sm font-bold ${isVoid ? 'text-error line-through' : 'text-on-surface'}`}>
-                                {formatCurrency(tx.amount)}
+                            <p className={`text-sm font-bold ${amountClass}`}>
+                                {manual ? manual.sign : ''}{formatCurrency(tx.amount)}
                             </p>
                             <p className="text-[0.625rem] font-semibold uppercase tracking-wide text-on-surface-variant">
-                                {isVoid ? 'Anulada' : isRefund ? 'Devolución' : meta.label}
+                                {isVoid ? 'Anulada' : isRefund ? 'Devolución' : manual ? manual.label : meta.label}
                             </p>
                         </div>
                     </button>

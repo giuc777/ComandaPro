@@ -55,12 +55,16 @@ DROP PROCEDURE IF EXISTS `sp_get_arqueo_breakdown`$$
 CREATE PROCEDURE `sp_get_arqueo_breakdown`(IN p_shift_id INT)
 BEGIN
     SELECT
-        IFNULL(SUM(CASE WHEN method = 'efectivo' THEN amount ELSE 0 END), 0) AS cash_total,
-        IFNULL(SUM(CASE WHEN method = 'tarjeta' THEN amount ELSE 0 END), 0) AS card_total,
-        IFNULL(SUM(CASE WHEN method = 'qr' THEN amount ELSE 0 END), 0) AS qr_total,
-        COUNT(*) AS transaction_count
+        IFNULL(SUM(CASE WHEN type = 'sale' AND method = 'efectivo' THEN amount ELSE 0 END), 0) AS cash_total,
+        IFNULL(SUM(CASE WHEN type = 'sale' AND method = 'tarjeta' THEN amount ELSE 0 END), 0) AS card_total,
+        IFNULL(SUM(CASE WHEN type = 'sale' AND method = 'qr' THEN amount ELSE 0 END), 0) AS qr_total,
+        IFNULL(SUM(CASE WHEN type = 'income' AND method = 'efectivo' THEN amount ELSE 0 END), 0) AS income_cash,
+        IFNULL(SUM(CASE WHEN type = 'expense' AND method = 'efectivo' THEN amount ELSE 0 END), 0) AS expense_cash,
+        IFNULL(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS income_total,
+        IFNULL(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expense_total,
+        COUNT(CASE WHEN type = 'sale' THEN 1 END) AS transaction_count
     FROM shift_transactions
-    WHERE shift_id = p_shift_id AND type = 'sale';
+    WHERE shift_id = p_shift_id AND type IN ('sale', 'income', 'expense');
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_get_cash_closing`$$
@@ -73,7 +77,11 @@ BEGIN
            IFNULL(s.cash_sales, 0) AS cash_sales,
            IFNULL(s.card_sales, 0) AS card_sales,
            IFNULL(s.qr_sales, 0) AS qr_sales,
-           IFNULL(s.transaction_count, 0) AS transaction_count
+           IFNULL(s.transaction_count, 0) AS transaction_count,
+           (SELECT IFNULL(SUM(st.amount), 0) FROM shift_transactions st
+            WHERE st.shift_id = s.id AND st.type = 'income') AS income_total,
+           (SELECT IFNULL(SUM(st.amount), 0) FROM shift_transactions st
+            WHERE st.shift_id = s.id AND st.type = 'expense') AS expense_total
     FROM shifts s
     JOIN users u ON s.cashier_id = u.id
     WHERE s.id = p_shift_id;
@@ -129,7 +137,16 @@ BEGIN
                    FROM shift_transactions st WHERE st.shift_id = s.id AND st.type = 'sale'), 0) AS card_sales,
            IFNULL((SELECT SUM(CASE WHEN st.method = 'qr' THEN st.amount ELSE 0 END)
                    FROM shift_transactions st WHERE st.shift_id = s.id AND st.type = 'sale'), 0) AS qr_sales,
-           (SELECT COUNT(*) FROM shift_transactions WHERE shift_id = s.id AND type = 'sale') AS transaction_count
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'income'), 0) AS income_total,
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'expense'), 0) AS expense_total,
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'income' AND st.method = 'efectivo'), 0) AS income_cash,
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'expense' AND st.method = 'efectivo'), 0) AS expense_cash,
+           (SELECT COUNT(*) FROM shift_transactions
+            WHERE shift_id = s.id AND type IN ('sale', 'income', 'expense')) AS transaction_count
     FROM shifts s
     JOIN users u ON s.cashier_id = u.id
     WHERE s.status = 'open'
@@ -401,7 +418,7 @@ END$$
 DROP PROCEDURE IF EXISTS `sp_get_shift_transactions`$$
 CREATE PROCEDURE `sp_get_shift_transactions`(IN p_shift_id INT)
 BEGIN
-    SELECT st.id, st.order_id, st.type, st.method, st.amount, st.created_at,
+    SELECT st.id, st.order_id, st.type, st.concept, st.method, st.amount, st.created_at,
            o.customer_name, o.mode, o.table_id, t.name AS table_name,
            p.id AS payment_id, p.amount_given, p.change_amount,
            u.name AS cashier_name,

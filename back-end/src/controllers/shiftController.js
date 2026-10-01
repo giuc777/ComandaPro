@@ -57,6 +57,8 @@ export function createShiftController(pool) {
                     card_sales: Number(row.card_sales),
                     qr_sales: Number(row.qr_sales),
                     transaction_count: Number(row.transaction_count),
+                    income_total: Number(row.income_total),
+                    expense_total: Number(row.expense_total),
                     message: 'Turno cerrado correctamente'
                 });
             } catch (error) {
@@ -117,18 +119,47 @@ export function createShiftController(pool) {
 
         async recordShiftTransaction(req, res) {
             const { id } = req.params;
-            const { order_id, type, method, amount } = req.body;
+            const { order_id, type, method, amount, concept } = req.body;
 
-            if (!type || !method || amount === undefined) {
+            if (!type || !method || amount === undefined || amount === null) {
                 return res.status(400).json({ error: 'type, method y amount son requeridos' });
             }
 
+            if (type !== 'income' && type !== 'expense') {
+                return res.status(400).json({ error: 'Tipo invalido: use income o expense' });
+            }
+
+            if (!['efectivo', 'tarjeta', 'qr'].includes(method)) {
+                return res.status(400).json({ error: 'Metodo invalido: use efectivo, tarjeta o qr' });
+            }
+
+            if (type === 'expense' && method !== 'efectivo') {
+                return res.status(400).json({ error: 'Un egreso solo puede ser en efectivo' });
+            }
+
+            const amountValue = Number(amount);
+            if (!Number.isFinite(amountValue) || amountValue <= 0) {
+                return res.status(400).json({ error: 'El monto debe ser mayor a cero' });
+            }
+
+            if (!concept || !String(concept).trim()) {
+                return res.status(400).json({ error: 'El concepto es obligatorio' });
+            }
+
             try {
-                await pool.query(
-                    'CALL sp_record_shift_transaction(?, ?, ?, ?, ?)',
-                    [Number(id), order_id ? Number(order_id) : null, type, method, Number(amount)]
+                const [result] = await pool.query(
+                    'CALL sp_record_shift_transaction(?, ?, ?, ?, ?, ?)',
+                    [
+                        Number(id),
+                        order_id ? Number(order_id) : null,
+                        type,
+                        method,
+                        amountValue,
+                        String(concept).trim().slice(0, 120)
+                    ]
                 );
-                res.status(201).json({ message: 'Transaccion registrada' });
+                const row = result[0];
+                res.status(201).json({ id: Number(row.id), message: 'Movimiento registrado' });
             } catch (error) {
                 console.error('Error in recordShiftTransaction:', error.message);
                 if (error.sqlState === '45000') {

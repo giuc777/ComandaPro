@@ -43,14 +43,19 @@ BEGIN
     END IF;
 
     -- Calcular efectivo esperado = efectivo inicial + ventas en efectivo
-    SELECT IFNULL(v_start_cash + SUM(CASE WHEN method = 'efectivo' THEN amount ELSE 0 END), v_start_cash)
+    --                              + ingresos manuales en efectivo - egresos en efectivo
+    SELECT IFNULL(v_start_cash + SUM(CASE
+                WHEN type = 'sale'    AND method = 'efectivo' THEN amount
+                WHEN type = 'income'  AND method = 'efectivo' THEN amount
+                WHEN type = 'expense' AND method = 'efectivo' THEN -amount
+                ELSE 0 END), v_start_cash)
     INTO v_expected_cash
     FROM shift_transactions
-    WHERE shift_id = p_shift_id AND type = 'sale';
+    WHERE shift_id = p_shift_id AND type IN ('sale', 'income', 'expense');
 
     SET v_difference = p_actual_cash - v_expected_cash;
 
-    -- Obtener totales por metodo
+    -- Obtener totales por metodo (solo ventas) e ingresos/egresos manuales
     SELECT IFNULL(SUM(amount), 0) INTO @total_sales
     FROM shift_transactions WHERE shift_id = p_shift_id AND type = 'sale';
     SELECT IFNULL(SUM(amount), 0) INTO @cash_sales
@@ -59,8 +64,12 @@ BEGIN
     FROM shift_transactions WHERE shift_id = p_shift_id AND type = 'sale' AND method = 'tarjeta';
     SELECT IFNULL(SUM(amount), 0) INTO @qr_sales
     FROM shift_transactions WHERE shift_id = p_shift_id AND type = 'sale' AND method = 'qr';
+    SELECT IFNULL(SUM(amount), 0) INTO @income_total
+    FROM shift_transactions WHERE shift_id = p_shift_id AND type = 'income';
+    SELECT IFNULL(SUM(amount), 0) INTO @expense_total
+    FROM shift_transactions WHERE shift_id = p_shift_id AND type = 'expense';
     SELECT COUNT(*) INTO @tx_count
-    FROM shift_transactions WHERE shift_id = p_shift_id AND type = 'sale';
+    FROM shift_transactions WHERE shift_id = p_shift_id AND type IN ('sale', 'income', 'expense');
 
     UPDATE shifts
     SET status = 'closed', close_time = CURRENT_TIMESTAMP,
@@ -74,23 +83,55 @@ BEGIN
     SELECT v_expected_cash AS expected_cash, p_actual_cash AS actual_cash,
            v_difference AS difference, @total_sales AS total_sales,
            @cash_sales AS cash_sales, @card_sales AS card_sales,
-           @qr_sales AS qr_sales, @tx_count AS transaction_count;
+           @qr_sales AS qr_sales, @tx_count AS transaction_count,
+           @income_total AS income_total, @expense_total AS expense_total;
 END //
 DELIMITER ;
 
 -- Registrar transaccion de turno
+--   p_type = 'income'  -> ingreso manual (metodo libre)
+--   p_type = 'expense' -> egreso manual (solo efectivo)
+-- El tipo 'sale' lo escribe unicamente sp_record_payment.
 DROP PROCEDURE IF EXISTS sp_record_shift_transaction;
 DELIMITER //
 CREATE PROCEDURE sp_record_shift_transaction(
     IN p_shift_id INT,
     IN p_order_id INT,
-    IN p_type ENUM('sale', 'refund', 'void'),
+    IN p_type ENUM('sale', 'refund', 'void', 'income', 'expense'),
     IN p_method ENUM('efectivo', 'tarjeta', 'qr'),
-    IN p_amount DECIMAL(10,2)
+    IN p_amount DECIMAL(10,2),
+    IN p_concept VARCHAR(120)
 )
 BEGIN
-    INSERT INTO shift_transactions (shift_id, order_id, type, method, amount)
-    VALUES (p_shift_id, p_order_id, p_type, p_method, p_amount);
+    IF NOT EXISTS (SELECT 1 FROM shifts WHERE id = p_shift_id AND status = 'open') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No hay un turno de caja abierto';
+    END IF;
+
+    IF p_type NOT IN ('income', 'expense') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Tipo invalido: use income o expense';
+    END IF;
+
+    IF p_amount IS NULL OR p_amount <= 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'El monto debe ser mayor a cero';
+    END IF;
+
+    IF p_concept IS NULL OR TRIM(p_concept) = '' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'El concepto es obligatorio';
+    END IF;
+
+    IF p_type = 'expense' AND p_method <> 'efectivo' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Un egreso solo puede ser en efectivo';
+    END IF;
+
+    INSERT INTO shift_transactions (shift_id, order_id, type, method, amount, concept)
+    VALUES (p_shift_id, p_order_id, p_type, p_method, p_amount, TRIM(p_concept));
+
+    SELECT LAST_INSERT_ID() AS id;
 END //
 DELIMITER ;
 
@@ -107,7 +148,16 @@ BEGIN
                    FROM shift_transactions st WHERE st.shift_id = s.id AND st.type = 'sale'), 0) AS card_sales,
            IFNULL((SELECT SUM(CASE WHEN st.method = 'qr' THEN st.amount ELSE 0 END)
                    FROM shift_transactions st WHERE st.shift_id = s.id AND st.type = 'sale'), 0) AS qr_sales,
-           (SELECT COUNT(*) FROM shift_transactions WHERE shift_id = s.id AND type = 'sale') AS transaction_count
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'income'), 0) AS income_total,
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'expense'), 0) AS expense_total,
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'income' AND st.method = 'efectivo'), 0) AS income_cash,
+           IFNULL((SELECT SUM(st.amount) FROM shift_transactions st
+                   WHERE st.shift_id = s.id AND st.type = 'expense' AND st.method = 'efectivo'), 0) AS expense_cash,
+           (SELECT COUNT(*) FROM shift_transactions
+            WHERE shift_id = s.id AND type IN ('sale', 'income', 'expense')) AS transaction_count
     FROM shifts s
     JOIN users u ON s.cashier_id = u.id
     WHERE s.status = 'open'
@@ -139,12 +189,16 @@ DELIMITER //
 CREATE PROCEDURE sp_get_arqueo_breakdown(IN p_shift_id INT)
 BEGIN
     SELECT
-        IFNULL(SUM(CASE WHEN method = 'efectivo' THEN amount ELSE 0 END), 0) AS cash_total,
-        IFNULL(SUM(CASE WHEN method = 'tarjeta' THEN amount ELSE 0 END), 0) AS card_total,
-        IFNULL(SUM(CASE WHEN method = 'qr' THEN amount ELSE 0 END), 0) AS qr_total,
-        COUNT(*) AS transaction_count
+        IFNULL(SUM(CASE WHEN type = 'sale' AND method = 'efectivo' THEN amount ELSE 0 END), 0) AS cash_total,
+        IFNULL(SUM(CASE WHEN type = 'sale' AND method = 'tarjeta' THEN amount ELSE 0 END), 0) AS card_total,
+        IFNULL(SUM(CASE WHEN type = 'sale' AND method = 'qr' THEN amount ELSE 0 END), 0) AS qr_total,
+        IFNULL(SUM(CASE WHEN type = 'income' AND method = 'efectivo' THEN amount ELSE 0 END), 0) AS income_cash,
+        IFNULL(SUM(CASE WHEN type = 'expense' AND method = 'efectivo' THEN amount ELSE 0 END), 0) AS expense_cash,
+        IFNULL(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS income_total,
+        IFNULL(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expense_total,
+        COUNT(CASE WHEN type = 'sale' THEN 1 END) AS transaction_count
     FROM shift_transactions
-    WHERE shift_id = p_shift_id AND type = 'sale';
+    WHERE shift_id = p_shift_id AND type IN ('sale', 'income', 'expense');
 END //
 DELIMITER ;
 
@@ -153,7 +207,7 @@ DROP PROCEDURE IF EXISTS sp_get_shift_transactions;
 DELIMITER //
 CREATE PROCEDURE sp_get_shift_transactions(IN p_shift_id INT)
 BEGIN
-    SELECT st.id, st.order_id, st.type, st.method, st.amount, st.created_at,
+    SELECT st.id, st.order_id, st.type, st.concept, st.method, st.amount, st.created_at,
            o.customer_name, o.mode, o.table_id, t.name AS table_name,
            p.id AS payment_id, p.amount_given, p.change_amount,
            u.name AS cashier_name,

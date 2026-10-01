@@ -542,6 +542,14 @@ export const api = {
         return response.json();
     },
 
+    async recordShiftTransaction(shiftId, data) {
+        const response = await fetchWithAuth(`/shifts/${shiftId}/transactions`, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+        return readJsonOrThrow(response);
+    },
+
     // ========================
     // PRINT
     // ========================

@@ -345,7 +345,9 @@ const options = {
                         cash_sales: { type: 'number', format: 'float', example: 0 },
                         card_sales: { type: 'number', format: 'float', example: 0 },
                         qr_sales: { type: 'number', format: 'float', example: 0 },
-                        transaction_count: { type: 'integer', example: 0 }
+                        transaction_count: { type: 'integer', example: 0 },
+                        income_total: { type: 'number', format: 'float', example: 0, description: 'Ingresos manuales del turno' },
+                        expense_total: { type: 'number', format: 'float', example: 0, description: 'Egresos manuales del turno' }
                     }
                 },
                 OpenShiftRequest: {
@@ -369,6 +371,10 @@ const options = {
                         cash_total: { type: 'number', format: 'float', example: 800.00 },
                         card_total: { type: 'number', format: 'float', example: 350.00 },
                         qr_total: { type: 'number', format: 'float', example: 100.00 },
+                        income_cash: { type: 'number', format: 'float', example: 20.00 },
+                        expense_cash: { type: 'number', format: 'float', example: 150.00 },
+                        income_total: { type: 'number', format: 'float', example: 20.00 },
+                        expense_total: { type: 'number', format: 'float', example: 150.00 },
                         transaction_count: { type: 'integer', example: 25 }
                     }
                 },

@@ -169,7 +169,11 @@ BEGIN
            IFNULL(s.cash_sales, 0) AS cash_sales,
            IFNULL(s.card_sales, 0) AS card_sales,
            IFNULL(s.qr_sales, 0) AS qr_sales,
-           IFNULL(s.transaction_count, 0) AS transaction_count
+           IFNULL(s.transaction_count, 0) AS transaction_count,
+           (SELECT IFNULL(SUM(st.amount), 0) FROM shift_transactions st
+            WHERE st.shift_id = s.id AND st.type = 'income') AS income_total,
+           (SELECT IFNULL(SUM(st.amount), 0) FROM shift_transactions st
+            WHERE st.shift_id = s.id AND st.type = 'expense') AS expense_total
     FROM shifts s
     JOIN users u ON s.cashier_id = u.id
     WHERE s.id = p_shift_id;

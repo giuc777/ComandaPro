@@ -475,8 +475,9 @@ sudo ufw enable
 
 > **Guia paso a paso:** [`Produccion/actualizacion.md`](Produccion/actualizacion.md)
 > (actualizacion incremental desde la version con migracion 017: KDS, `/ordenes`,
-> Dashboard, cobro y estados de mesa con las migraciones 018 y 020). Incluye
-> verificacion previa, backup, orden de archivos, backfill opcional y rollback.
+> Dashboard, cobro, estados de mesa e ingresos/egresos de caja con las
+> migraciones 018, 020 y 021). Incluye verificacion previa, backup, orden de
+> archivos, backfill opcional y rollback.
 
 ```bash
 cd ~/desarrollo

@@ -320,3 +320,98 @@ dejaba ventas fuera del turno (no aparecían en Caja).
   HTTP 409). El enlace de la venta al turno pasó a ser obligatorio.
 - **Frontend:** `PaymentView` exige `shift` en `canPay`, oculta los controles
   de pago y muestra un aviso con botón **Abrir Caja** cuando no hay turno.
+
+---
+
+## 8. Ampliación: ingresos y egresos manuales
+
+Movimientos de caja que no provienen de una venta: **ingresos** (propina,
+aporte) y **egresos** (retiro de efectivo para comprar ingredientes, gastos).
+Se registran contra el turno abierto y afectan el arqueo.
+
+### 8.1 Decisiones
+
+- El **concepto** (motivo) es de texto libre y **obligatorio** (máx. 120).
+- Puede registrar cualquier rol con el módulo `caja` (Administrador, Barista,
+  Cajero). No se creó un permiso nuevo.
+- **Egresos solo en efectivo** (sale dinero físico del cajón). Los **ingresos**
+  aceptan efectivo, tarjeta o QR.
+- `total_sales`, `cash_sales`, `card_sales` y `qr_sales` siguen siendo **solo
+  ventas**; los movimientos manuales se reportan aparte.
+
+### 8.2 Esquema — migración `021_caja_ingresos_egresos.sql`
+
+```sql
+ALTER TABLE shift_transactions
+    ADD COLUMN concept VARCHAR(120) NULL AFTER type;
+ALTER TABLE shift_transactions
+    MODIFY type ENUM('sale', 'refund', 'void', 'income', 'expense') NOT NULL;
+```
+
+`type`: `income` (ingreso) y `expense` (egreso). `concept` guarda el motivo.
+Se actualizaron también `database/01_create_tables.sql`,
+`Deploy/Produccion/schema.sql` y `Deploy/Test/schema.sql`.
+
+### 8.3 Procedimientos
+
+| SP | Cambio |
+|---|---|
+| `sp_record_shift_transaction` | Nuevo parámetro `p_concept`. Valida turno `open`, `type IN ('income','expense')`, monto > 0, concepto no vacío y egreso solo en `efectivo` (todas `SIGNAL 45000`). Devuelve el `id` insertado. |
+| `sp_close_shift` | `expected_cash = efectivo inicial + ventas efectivo + ingresos efectivo − egresos efectivo`. Devuelve `income_total` y `expense_total`. |
+| `sp_get_current_shift` | Agrega `income_total`, `expense_total`, `income_cash`, `expense_cash`. |
+| `sp_get_arqueo_breakdown` | Agrega los 4 campos anteriores. |
+| `sp_get_shift_transactions` | Devuelve `st.concept`. |
+| `sp_get_cash_closing` | Agrega `income_total` y `expense_total` (cierre en Reportes). |
+
+`transaction_count` (en `sp_close_shift`, `sp_get_current_shift`) cuenta ahora
+`type IN ('sale','income','expense')`.
+
+### 8.4 Endpoint
+
+`POST /api/shifts/:id/transactions` (módulo `caja`, ya existía pero sin
+consumidor). Body:
+
+```json
+{ "type": "income|expense", "method": "efectivo|tarjeta|qr", "amount": 50, "concept": "Propina" }
+```
+
+- `201` → `{ "id": <movimiento>, "message": "Movimiento registrado" }`
+- `400` → monto inválido, concepto vacío, tipo distinto de `income`/`expense`,
+  método inválido, o egreso que no sea en efectivo.
+- `409` → no hay turno de caja abierto.
+
+`type='sale'` solo lo escribe `sp_record_payment`; el endpoint manual lo
+rechaza para que nadie pueda falsificar una venta.
+
+### 8.5 Frontend
+
+- **`components/MovementModal.jsx`** (nuevo): monto, método (efectivo fijo y
+  el resto deshabilitado si es egreso), concepto con sugerencias rápidas.
+  `data-testid`: `movement-modal`, `movement-amount`, `movement-concept`,
+  `movement-submit`.
+- **`pages/CajaPage.jsx`**: botones **Ingresar** / **Retirar**
+  (`open-income` / `open-expense`), KPIs de ingresos y egresos, y desglose de
+  ambos en la tarjeta de total.
+- **`components/TransactionsList.jsx`**: badge **Ingreso** (verde, `+`) y
+  **Egreso** (rojo, `−`) con el concepto.
+- **`components/ArqueoModal.jsx`**: efectivo esperado = inicial + ventas en
+  efectivo + ingresos en efectivo − egresos en efectivo, con desglose visible.
+
+### 8.6 Criterios de aceptación
+
+- [x] Migración 021 aplicada (columna `concept` + enum con `income`/`expense`)
+- [x] Ingreso en efectivo/tarjeta/QR se registra contra el turno abierto
+- [x] Egreso solo en efectivo (tarjeta → 400)
+- [x] Monto ≤ 0, concepto vacío, tipo `sale` y método inválido → 400
+- [x] Sin turno abierto → 409
+- [x] El listado y el turno actual exponen `concept` y los totales
+- [x] El arqueo y el cierre incluyen ingresos/egresos (diferencia 0 al contar)
+- [x] Cualquier rol con módulo `caja` puede registrar movimientos
+
+### 8.7 Pruebas
+
+`test_caja_movimientos.ps1` — **19/19 OK**: altas, validaciones, lecturas
+(turno, listado, arqueo), cierre con `difference = 0` y limpieza. Regresión
+`test_mesas` (17/17), `test_e` (21/21), `test_e_modal` (17/17) y
+`test_f1_api` (13/13).
+

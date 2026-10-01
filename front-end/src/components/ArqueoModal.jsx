@@ -26,7 +26,9 @@ export default function ArqueoModal({ shift, arqueo, onConfirm, onClose, loading
     };
 
     const totalContado = DENOMINATIONS.reduce((sum, d) => sum + d.value * (counts[d.value] || 0), 0);
-    const expectedCash = Number(arqueo?.cash_total || 0) + Number(shift?.start_cash || 0);
+    const incomeCash = Number(arqueo?.income_cash || 0);
+    const expenseCash = Number(arqueo?.expense_cash || 0);
+    const expectedCash = Number(arqueo?.cash_total || 0) + Number(shift?.start_cash || 0) + incomeCash - expenseCash;
     const difference = totalContado - expectedCash;
 
     if (!shift) return null;
@@ -60,6 +62,24 @@ export default function ArqueoModal({ shift, arqueo, onConfirm, onClose, loading
                         <div className="flex justify-between items-center">
                             <span className="text-sm text-on-surface-variant">Efectivo esperado</span>
                             <span className="font-display text-lg text-primary font-bold">Q {expectedCash.toFixed(2)}</span>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-primary/15 flex flex-col gap-1 text-xs">
+                            <div className="flex justify-between">
+                                <span className="text-on-surface-variant">Efectivo inicial</span>
+                                <span className="font-semibold text-on-surface">Q {Number(shift?.start_cash || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-on-surface-variant">Ventas en efectivo</span>
+                                <span className="font-semibold text-on-surface">+Q {Number(arqueo?.cash_total || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-on-surface-variant">Ingresos en efectivo</span>
+                                <span className="font-semibold text-tertiary">+Q {incomeCash.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-on-surface-variant">Egresos en efectivo</span>
+                                <span className="font-semibold text-error">-Q {expenseCash.toFixed(2)}</span>
+                            </div>
                         </div>
                     </div>
 

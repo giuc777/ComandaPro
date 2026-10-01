@@ -74,6 +74,12 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > [`020_mesa_libre_ocupada.sql`](../Deploy/Produccion/migrations/020_mesa_libre_ocupada.sql)
 > — ver [FASE_09](fases/FASE_09_mesas.md).
 
+> **Nota (caja):** la Fase 10 sumó **ingresos y egresos manuales** (propina,
+> retiro para compras) con concepto obligatorio y egresos solo en efectivo;
+> ajustan el efectivo esperado del arqueo. Requiere la migración
+> [`021_caja_ingresos_egresos.sql`](../Deploy/Produccion/migrations/021_caja_ingresos_egresos.sql)
+> — ver [FASE_10](fases/FASE_10_turnos_caja.md) §8.
+
 > **Nota (plan de cocina y órdenes):** Fase 5 (KDS) y Fase 15 (Órdenes del
 > Administrador) están **en implementación por sub-fases**: A (datos), B (backend),
 > C (pantalla KDS), **D (POS: enviar a cocina)**, **H (agregar ítems a ordenes en

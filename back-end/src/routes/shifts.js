@@ -86,7 +86,7 @@ import { authenticate } from '../middleware/auth.js';
  * @swagger
  * /api/shifts/{id}/transactions:
  *   post:
- *     summary: Registrar transaccion en turno
+ *     summary: Registrar ingreso o egreso manual en el turno
  *     tags: [Turnos]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -100,15 +100,20 @@ import { authenticate } from '../middleware/auth.js';
  *         application/json:
  *           schema:
  *             type: object
- *             required: [type, method, amount]
+ *             required: [type, method, amount, concept]
  *             properties:
  *               order_id: { type: integer, nullable: true }
- *               type: { type: string, enum: [sale, refund, void] }
- *               method: { type: string, enum: [efectivo, tarjeta, qr] }
+ *               type: { type: string, enum: [income, expense], description: income = ingreso manual; expense = egreso manual }
+ *               method: { type: string, enum: [efectivo, tarjeta, qr], description: un egreso solo admite efectivo }
  *               amount: { type: number, format: float }
+ *               concept: { type: string, maxLength: 120, description: motivo del movimiento }
  *     responses:
  *       201:
- *         description: Transaccion registrada
+ *         description: Movimiento registrado
+ *       400:
+ *         description: Datos invalidos (monto, concepto, tipo o metodo)
+ *       409:
+ *         description: No hay un turno de caja abierto
  */
 /**
  * @swagger

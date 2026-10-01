@@ -265,8 +265,12 @@ Pantalla **Sin Turno** / **Sin turno activo** con los indicadores en cero.
   **Turno #ID Abierto** (al hacer clic abre el arqueo).
 - Tarjeta con cajero, hora de inicio, efectivo inicial, antiguedad del turno y
   cantidad de transacciones.
-- Indicadores: **Efectivo**, **Tarjeta**, **QR** y bloque **Total del turno**.
+- Indicadores: **Efectivo**, **Tarjeta**, **QR**, **Ingresos**, **Egresos** y
+  bloque **Total del turno (ventas)** con el desglose de ingresos (`+`) y
+  egresos (`-`) manuales.
 - Botones:
+  - **Ingresar** (icono `+`) -> abre el modal para registrar un ingreso.
+  - **Retirar** (icono `-`) -> abre el modal para registrar un egreso.
   - **Cerrar Turno** (icono de candado) -> abre el arqueo.
   - **Movimientos del turno**: lista de transacciones del turno actual, que se
     actualiza sola cada 15 segundos. Sin movimientos: **Sin movimientos
@@ -279,8 +283,8 @@ Pantalla **Sin Turno** / **Sin turno activo** con los indicadores en cero.
 
 Modal **Arqueo de Caja** al presionar **Cerrar Turno** o el distintivo de turno:
 
-1. Se muestra el **Efectivo esperado** (ventas en efectivo + efectivo
-   inicial).
+1. Se muestra el **Efectivo esperado** (efectivo inicial + ventas en efectivo
+   + ingresos en efectivo - egresos en efectivo), con el desglose de cada parte.
 2. Contar billetes y monedas en **Conteo de Denominaciones**: Q100, Q50, Q20,
    Q10, Q5, Q1, Q0.50 y Q0.25. Cada fila calcula su subtotal.
 3. Revisar:
@@ -304,6 +308,32 @@ Al hacer clic en cualquier transacción se abre **Detalle del movimiento** con:
 
 > Para ver movimientos de un turno cerrado, usar **Turnos Anteriores** y elegir
 > **Turno #ID** (se abre el historial con el detalle de cada transaccion).
+
+### 6.5 Ingresos y egresos manuales
+
+Con el turno abierto, los botones **Ingresar** y **Retirar** registran
+movimientos que no vienen de una venta:
+
+- **Ingreso** (verde, `+`): propina, aporte u otro dinero que entra a caja.
+  Admite **Efectivo**, **Tarjeta** o **QR**.
+- **Egreso** (rojo, `-`): retiro de efectivo para comprar ingredientes u otro
+  gasto. Solo admite **Efectivo** (el resto de metodos queda deshabilitado).
+
+En el modal **Registrar ingreso / Registrar egreso**:
+
+1. Escribir el **Monto** (debe ser mayor a cero).
+2. Elegir el **Metodo**.
+3. Escribir el **Concepto** (obligatorio) o usar una sugerencia rapida
+   (*Propina*, *Compra de ingredientes*, etc.).
+4. Presionar **Registrar ingreso / Registrar egreso**.
+
+Los movimientos aparecen en **Movimientos del turno** con su etiqueta
+**Ingreso**/**Egreso** y el concepto, y actualizan los indicadores y el
+**Efectivo esperado** del arqueo.
+
+> Requiere un turno abierto (si no, la respuesta es 409: *No hay un turno de
+> caja abierto*). El concepto no puede quedar vacio y un egreso siempre es en
+> efectivo.
 
 ---
 

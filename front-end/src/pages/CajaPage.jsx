@@ -10,6 +10,7 @@ import ArqueoModal from '../components/ArqueoModal';
 import TransactionsList from '../components/TransactionsList';
 import TransactionDetailModal from '../components/TransactionDetailModal';
 import ShiftTransactionsModal from '../components/ShiftTransactionsModal';
+import MovementModal from '../components/MovementModal';
 
 function formatCurrency(amount) {
     return `Q ${Number(amount || 0).toFixed(2)}`;
@@ -61,6 +62,7 @@ function ShiftView({ navigate }) {
     const [loadingTx, setLoadingTx] = useState(true);
     const [selectedTx, setSelectedTx] = useState(null);
     const [selectedHistoryShift, setSelectedHistoryShift] = useState(null);
+    const [movementMode, setMovementMode] = useState(null);
 
     const loadShift = useCallback(async () => {
         try {
@@ -125,8 +127,19 @@ function ShiftView({ navigate }) {
             setArqueoData(data);
             setShowArqueo(true);
         } catch {
-            setArqueoData({ cash_total: 0, card_total: 0, qr_total: 0, transaction_count: 0 });
+            setArqueoData({
+                cash_total: 0, card_total: 0, qr_total: 0,
+                income_cash: 0, expense_cash: 0,
+                income_total: 0, expense_total: 0, transaction_count: 0
+            });
             setShowArqueo(true);
+        }
+    };
+
+    const handleMovementSaved = () => {
+        if (shift) {
+            loadTransactions(shift.id);
+            loadShift();
         }
     };
 
@@ -235,14 +248,62 @@ function ShiftView({ navigate }) {
                         </div>
                     </div>
 
+                    {/* Ingresos y egresos manuales */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div data-testid="kpi-income" className="kpi-card">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="w-8 h-8 rounded-lg bg-tertiary/10 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-tertiary text-[18px]">add_circle</span>
+                                </span>
+                                <span className="text-xs text-on-surface-variant font-semibold">Ingresos</span>
+                            </div>
+                            <span className="font-display text-lg text-on-surface font-bold">{formatCurrency(shift.income_total)}</span>
+                        </div>
+                        <div data-testid="kpi-expense" className="kpi-card">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="w-8 h-8 rounded-lg bg-error/10 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-error text-[18px]">remove_circle</span>
+                                </span>
+                                <span className="text-xs text-on-surface-variant font-semibold">Egresos</span>
+                            </div>
+                            <span className="font-display text-lg text-on-surface font-bold">{formatCurrency(shift.expense_total)}</span>
+                        </div>
+                    </div>
+
                     {/* Total */}
-                    <div className="bg-primary/5 rounded-2xl border border-primary/15 p-4">
+                    <div className="bg-primary/5 rounded-2xl border border-primary/15 p-4 flex flex-col gap-2">
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-on-surface-variant">Total del turno</span>
+                            <span className="text-sm text-on-surface-variant">Total del turno (ventas)</span>
                             <span className="font-display text-xl text-primary font-bold">
                                 {formatCurrency(Number(shift.cash_sales || 0) + Number(shift.card_sales || 0) + Number(shift.qr_sales || 0))}
                             </span>
                         </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-on-surface-variant">Ingresos manuales</span>
+                            <span className="font-semibold text-tertiary">+{formatCurrency(shift.income_total)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-on-surface-variant">Egresos manuales</span>
+                            <span className="font-semibold text-error">-{formatCurrency(shift.expense_total)}</span>
+                        </div>
+                    </div>
+
+                    {/* Ingresar / Retirar */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={() => setMovementMode('income')}
+                            data-testid="open-income"
+                            className="btn-secondary w-full justify-center"
+                        >
+                            <span className="material-symbols-outlined text-[16px] text-tertiary">add_circle</span> Ingresar
+                        </button>
+                        <button
+                            onClick={() => setMovementMode('expense')}
+                            data-testid="open-expense"
+                            className="btn-secondary w-full justify-center"
+                        >
+                            <span className="material-symbols-outlined text-[16px] text-error">remove_circle</span> Retirar
+                        </button>
                     </div>
 
                     {/* Cerrar turno */}
@@ -321,6 +382,15 @@ function ShiftView({ navigate }) {
                     <TransactionDetailModal
                         transaction={selectedTx}
                         onClose={() => setSelectedTx(null)}
+                    />
+                )}
+
+                {movementMode && (
+                    <MovementModal
+                        mode={movementMode}
+                        shiftId={shift.id}
+                        onSaved={handleMovementSaved}
+                        onClose={() => setMovementMode(null)}
                     />
                 )}
 
