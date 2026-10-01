@@ -364,6 +364,14 @@ export const api = {
         return response.json();
     },
 
+    async updateTableStatus(id, status) {
+        const response = await fetchWithAuth(`/tables/${id}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status })
+        });
+        return readJsonOrThrow(response);
+    },
+
     // ========================
     // ORDERS
     // ========================

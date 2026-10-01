@@ -42,11 +42,11 @@ const MOCK_ITEMS = {
   mesas: [
     { id: 38, group_id: 8, name: 'Mesa 1', icon: 'table_restaurant', color: '#006b3f', sort_order: 1, capacity: 4, table_status: 'free' },
     { id: 39, group_id: 8, name: 'Mesa 2', icon: 'table_restaurant', color: '#006b3f', sort_order: 2, capacity: 4, table_status: 'free' },
-    { id: 40, group_id: 8, name: 'Mesa 3', icon: 'table_restaurant', color: '#006b3f', sort_order: 3, capacity: 4, table_status: 'dirty' },
-    { id: 41, group_id: 8, name: 'Terraza A', icon: 'deck', color: '#543310', sort_order: 4, capacity: 4, table_status: 'dirty' },
-    { id: 42, group_id: 8, name: 'Terraza B', icon: 'deck', color: '#543310', sort_order: 5, capacity: 4, table_status: 'dirty' },
-    { id: 43, group_id: 8, name: 'Barra Principal', icon: 'countertops', color: '#0061a4', sort_order: 6, capacity: 6, table_status: 'dirty' },
-    { id: 44, group_id: 8, name: 'Sala Privada', icon: 'meeting_room', color: '#9c4221', sort_order: 7, capacity: 8, table_status: 'dirty' },
+    { id: 40, group_id: 8, name: 'Mesa 3', icon: 'table_restaurant', color: '#006b3f', sort_order: 3, capacity: 4, table_status: 'occupied' },
+    { id: 41, group_id: 8, name: 'Terraza A', icon: 'deck', color: '#543310', sort_order: 4, capacity: 4, table_status: 'occupied' },
+    { id: 42, group_id: 8, name: 'Terraza B', icon: 'deck', color: '#543310', sort_order: 5, capacity: 4, table_status: 'occupied' },
+    { id: 43, group_id: 8, name: 'Barra Principal', icon: 'countertops', color: '#0061a4', sort_order: 6, capacity: 6, table_status: 'occupied' },
+    { id: 44, group_id: 8, name: 'Sala Privada', icon: 'meeting_room', color: '#9c4221', sort_order: 7, capacity: 8, table_status: 'occupied' },
     { id: 45, group_id: 8, name: 'Area de Estudio', icon: 'desk', color: '#002b26', sort_order: 8, capacity: 4, table_status: 'free' },
   ],
 };
@@ -72,6 +72,7 @@ export default function CatalogoDetallePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_ITEM });
+  const [mesaStatus, setMesaStatus] = useState('free');
   const [toast, setToast] = useState(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [allProducts, setAllProducts] = useState([]);
@@ -119,11 +120,13 @@ export default function CatalogoDetallePage() {
   function openCreate() {
     setEditingItem(null);
     setForm({ ...EMPTY_ITEM });
+    setMesaStatus('free');
     setModalOpen(true);
   }
 
   function openEdit(item) {
     setEditingItem(item);
+    setMesaStatus(item.table_status || 'free');
     setForm({
       name: item.name || '',
       description: item.description || '',
@@ -148,6 +151,16 @@ export default function CatalogoDetallePage() {
     }
 
     if (useApi) {
+      // Estado de la mesa (libre/ocupada): se aplica primero para no cerrar
+      // el modal si la operacion es rechazada (409 con orden activa).
+      if (editingItem?.table_id && mesaStatus && mesaStatus !== editingItem.table_status) {
+        try {
+          await api.updateTableStatus(editingItem.table_id, mesaStatus);
+        } catch (err) {
+          showToast(err.message || 'No se pudo cambiar el estado de la mesa', 'error');
+          return;
+        }
+      }
       try {
         if (editingItem) {
           await api.updateCatalogItem(editingItem.id, form);
@@ -164,10 +177,10 @@ export default function CatalogoDetallePage() {
       const updated = [...items];
       if (editingItem) {
         const idx = updated.findIndex(i => i.id === editingItem.id);
-        if (idx !== -1) updated[idx] = { ...updated[idx], ...form };
+        if (idx !== -1) updated[idx] = { ...updated[idx], ...form, table_status: mesaStatus };
       } else {
         const maxId = items.reduce((m, i) => Math.max(m, i.id), 0);
-        updated.push({ id: maxId + 1, group_id: group.id, ...form, parent_name: null });
+        updated.push({ id: maxId + 1, group_id: group.id, ...form, parent_name: null, table_status: mesaStatus });
       }
       setItems(updated);
     }
@@ -327,19 +340,17 @@ export default function CatalogoDetallePage() {
                       <td className="px-4 py-3 text-[0.8125rem] text-on-surface-variant">{item.capacity || 4}</td>
                     )}
                     {group?.slug === 'mesas' && (
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-[0.8125rem] text-on-surface-variant">
                         {item.table_status ? (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.625rem] font-bold ${
-                            item.table_status === 'free' ? 'bg-green-100 text-green-700' :
-                            item.table_status === 'occupied' ? 'bg-red-100 text-red-700' :
-                            'bg-yellow-100 text-yellow-700'
+                            item.table_status === 'occupied'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-green-100 text-green-700'
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${
-                              item.table_status === 'free' ? 'bg-green-500' :
-                              item.table_status === 'occupied' ? 'bg-red-500' :
-                              'bg-yellow-500'
+                              item.table_status === 'occupied' ? 'bg-red-500' : 'bg-green-500'
                             }`}></span>
-                            {item.table_status === 'free' ? 'Libre' : item.table_status === 'occupied' ? 'Ocupada' : 'Sucia'}
+                            {item.table_status === 'occupied' ? 'Ocupada' : 'Libre'}
                           </span>
                         ) : <span className="text-on-surface-variant">-</span>}
                       </td>
@@ -409,6 +420,23 @@ export default function CatalogoDetallePage() {
                   <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Capacidad</label>
                   <input type="number" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: parseInt(e.target.value) || 4 }))} className="input-field" min="1" />
                   <span className="text-[0.6875rem] text-on-surface-variant">Personas por mesa/espacio</span>
+                </div>
+              )}
+              {group?.slug === 'mesas' && editingItem?.table_id && (
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-1 font-semibold uppercase tracking-wider">Estado</label>
+                  <select
+                    value={mesaStatus}
+                    onChange={e => setMesaStatus(e.target.value)}
+                    className="input-field"
+                    data-testid="mesa-status"
+                  >
+                    <option value="free">Libre</option>
+                    <option value="occupied">Ocupada</option>
+                  </select>
+                  <span className="text-[0.6875rem] text-on-surface-variant mt-0.5 block">
+                    Libre = disponible. Ocupada = con clientes; no se puede liberar mientras tenga una orden activa.
+                  </span>
                 </div>
               )}
               {group.is_modifier && (

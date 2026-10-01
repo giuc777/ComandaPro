@@ -80,8 +80,8 @@ BEGIN
         UPDATE orders SET status = 'pagada' WHERE id = p_order_id;
     END IF;
 
-    -- Liberar mesa (queda sucia para limpieza)
-    UPDATE tables SET status = 'dirty', current_order_id = NULL
+    -- Liberar mesa (dos estados: libre/ocupada, vuelve a libre al cobrar)
+    UPDATE tables SET status = 'free', current_order_id = NULL
     WHERE current_order_id = p_order_id;
 
     -- Ligar la venta al turno abierto (obligatorio)

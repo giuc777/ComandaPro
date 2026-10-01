@@ -160,8 +160,10 @@ Dos botones en la parte superior:
 
 - **Mesa / Seleccionar mesa**: abre el modal **Seleccionar Mesa**.
   - Muestra todas las mesas en una cuadricula con su nombre, capacidad
-    (`N pers.`) y estado: **Libre** (verde), **Ocupada** (rojo), **Sucia**
-    (amarillo).
+    (`N pers.`) y estado: **Libre** (verde) u **Ocupada** (rojo).
+  - Cada mesa tiene un candado para **cambiar el estado a mano**
+    (🔓 marcar ocupada / 🔒 marcar libre). Si la mesa tiene una orden
+    activa el sistema responde con un aviso y no la libera.
   - La mesa elegida se marca con un check y queda en el boton.
   - Se cierra con la tecla `Escape`, con el icono de cierre o al elegir una
     mesa.
@@ -341,7 +343,8 @@ registrada. Puede finalizar cuando el cliente haya salido.*
 
 - **Imprimir**: envia el recibo a la impresora (*Imprimiendo...* ->
   *Impreso* o *Error - Reintentar*).
-- **Finalizar venta**: regresa al POS y deja la mesa libre.
+- **Finalizar venta**: regresa al POS. La mesa ya quedo **libre** al
+  registrar el pago (solo tiene dos estados: libre u ocupada).
 
 ---
 
@@ -479,12 +482,13 @@ Dentro de **Ver** se listan los items. Botones **Nuevo Item** y, si es
 modificador, **Asignar productos**.
 
 - Tabla: **Item**, **Icono**, **Color**, **Orden**; para el grupo `mesas`
-  agrega **Cap.** y **Estado** (chips **Libre** / **Ocupada** / **Sucia**); para
+  agrega **Cap.** y **Estado** (chips **Libre** / **Ocupada**); para
   modificadores agrega **Ajuste** (`+$X` o `-$X`).
 - Modal **Nuevo Item** / **Editar Item**: **Nombre**, **Descripcion**,
   **Icono**, **Color**, **Orden**, y segun el grupo: **Capacidad**
   (*Personas por mesa/espacio*) o **Ajuste de precio** (*Positivo = mas caro,
-  negativo = mas barato*).
+  negativo = mas barato*). En mesas, la edicion agrega **Estado**
+  (**Libre** / **Ocupada**); no deja liberar una mesa con orden activa.
 - Desactivar: confirmacion **Desactivar item**.
 
 ### 11.3 Asignar modificadores a productos
@@ -625,8 +629,10 @@ Unico boton: **Ir al POS**.
 
 - **¿Donde veo las ventas del dia?** Dashboard (**Ventas Hoy**) y Reportes
   (**Hoy**).
-- **¿Como libero una mesa?** Al finalizar la venta con **Finalizar venta**
-  en el recibo, o al anular la orden desde **Ordenes Pausadas**.
+- **¿Como libero una mesa?** Se libera sola al **cobrar** o al **anular** la
+  orden; si hace falta, cambiala a *Libre* con el candado del selector de
+  mesas (POS) o en **Catalogos > Mesas > Editar > Estado**. Mientras tenga
+  una orden activa el sistema no deja liberarla (aviso 409).
 - **¿Y si no hay turno de caja?** Abrir caja en Caja con el efectivo inicial
   antes de cobrar.
 - **¿Se cobra IVA siempre?** No; el IVA 12% se aplica marcando la casilla

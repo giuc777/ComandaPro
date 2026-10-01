@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
+import { api } from '../api/apiClient';
 
 const STATUS_META = {
     free: { label: 'Libre', dot: 'bg-green-500', chip: 'bg-green-100 text-green-700' },
-    occupied: { label: 'Ocupada', dot: 'bg-red-500', chip: 'bg-red-100 text-red-700' },
-    dirty: { label: 'Sucia', dot: 'bg-amber-500', chip: 'bg-amber-100 text-amber-700' },
+    occupied: { label: 'Ocupada', dot: 'bg-red-500', chip: 'bg-red-100 text-red-700' }
 };
 
-export default function TableSelector({ tables, selectedId, onSelect, onClose }) {
+export default function TableSelector({ tables, selectedId, onSelect, onClose, onStatusChange, onError }) {
     const [open, setOpen] = useState(false);
+    const [busyId, setBusyId] = useState(null);
 
     useEffect(() => {
         if (!open) return;
@@ -26,6 +27,21 @@ export default function TableSelector({ tables, selectedId, onSelect, onClose })
     function handleSelect(table) {
         onSelect(table);
         close();
+    }
+
+    async function handleToggleStatus(table, event) {
+        event.stopPropagation();
+        if (busyId) return;
+        const next = table.status === 'free' ? 'occupied' : 'free';
+        setBusyId(table.id);
+        try {
+            await api.updateTableStatus(table.id, next);
+            await onStatusChange?.();
+        } catch (error) {
+            onError?.(error.message || 'No se pudo cambiar el estado de la mesa');
+        } finally {
+            setBusyId(null);
+        }
     }
 
     const selected = tables.find(t => t.id === selectedId);
@@ -74,9 +90,16 @@ export default function TableSelector({ tables, selectedId, onSelect, onClose })
                                     {tables.map(table => {
                                         const meta = STATUS_META[table.status] || STATUS_META.free;
                                         const isSelected = selectedId === table.id;
+                                        const isFree = table.status === 'free';
+                                        const busy = busyId === table.id;
                                         return (
-                                            <button key={table.id} onClick={() => handleSelect(table)}
-                                                className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-all ${isSelected
+                                            <div
+                                                key={table.id}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => handleSelect(table)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleSelect(table); }}
+                                                className={`relative flex flex-col items-center gap-1.5 p-3 pb-8 rounded-xl border text-center transition-all cursor-pointer ${isSelected
                                                     ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
                                                     : 'border-outline-variant/40 bg-surface-container-lowest hover:border-primary/50 hover:bg-primary/5'}`}
                                                 data-testid={`table-option-${table.id}`}>
@@ -90,7 +113,17 @@ export default function TableSelector({ tables, selectedId, onSelect, onClose })
                                                 {isSelected && (
                                                     <span className="absolute top-1.5 right-1.5 material-symbols-outlined text-[16px] text-primary">check_circle</span>
                                                 )}
-                                            </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={busy}
+                                                    onClick={event => handleToggleStatus(table, event)}
+                                                    title={isFree ? 'Marcar mesa ocupada' : 'Marcar mesa libre'}
+                                                    aria-label={isFree ? `Marcar ${table.name} ocupada` : `Marcar ${table.name} libre`}
+                                                    className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                                                    data-testid={`table-status-toggle-${table.id}`}>
+                                                    <span className="material-symbols-outlined text-[16px]">{isFree ? 'lock_open' : 'lock'}</span>
+                                                </button>
+                                            </div>
                                         );
                                     })}
                                 </div>

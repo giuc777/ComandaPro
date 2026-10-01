@@ -16,6 +16,7 @@ export default function PosPage() {
     const { confirm, confirmModal } = useConfirm();
 
     const [tables, setTables] = useState([]);
+    const [tablesRefresh, setTablesRefresh] = useState(0);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [showToast, setShowToast] = useState(null);
     const [actionBusy, setActionBusy] = useState(false);
@@ -39,7 +40,7 @@ export default function PosPage() {
             }
         }
         loadTables();
-    }, []);
+    }, [tablesRefresh]);
 
     function showTemp(message, type = 'success') {
         setShowToast({ message, type });
@@ -255,6 +256,8 @@ export default function PosPage() {
                             selectedId={order.tableId}
                             onSelect={(t) => setTable(t.id, t.name)}
                             onClose={() => {}}
+                            onStatusChange={() => setTablesRefresh(r => r + 1)}
+                            onError={(message) => showTemp(message, 'error')}
                         />
                     </div>
                     <div className="w-64">

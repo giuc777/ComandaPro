@@ -432,13 +432,63 @@ CREATE PROCEDURE `sp_reopen_order`(
     IN p_notes TEXT
 )
 BEGIN
+    DECLARE v_old_table INT DEFAULT NULL;
+    DECLARE v_target_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_target_order_id INT DEFAULT NULL;
+    DECLARE v_target_order_status VARCHAR(20) DEFAULT NULL;
+    DECLARE v_affected INT DEFAULT 0;
+
+    SELECT table_id INTO v_old_table
+    FROM orders
+    WHERE id = p_order_id AND status NOT IN ('pagada', 'anulada');
+
+    IF p_table_id IS NOT NULL THEN
+        SELECT t.status, t.current_order_id, o.status
+        INTO v_target_status, v_target_order_id, v_target_order_status
+        FROM tables t
+        LEFT JOIN orders o ON o.id = t.current_order_id
+        WHERE t.id = p_table_id;
+
+        IF v_target_status IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Mesa no encontrada';
+        END IF;
+
+        IF v_target_status = 'occupied'
+            AND v_target_order_id IS NOT NULL
+            AND v_target_order_id <> p_order_id
+            AND v_target_order_status IS NOT NULL
+            AND v_target_order_status NOT IN ('pagada', 'anulada') THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'La mesa esta ocupada';
+        END IF;
+    END IF;
+
     UPDATE orders
     SET table_id = p_table_id,
         customer_name = p_customer_name,
         mode = p_mode,
         notes = p_notes
     WHERE id = p_order_id AND status NOT IN ('pagada', 'anulada');
-    SELECT ROW_COUNT() AS affected;
+
+    SET v_affected = ROW_COUNT();
+
+    -- sincronizar mesas: liberar la origen y ocupar la destino
+    IF v_affected > 0 THEN
+        IF v_old_table IS NOT NULL AND (p_table_id IS NULL OR v_old_table <> p_table_id) THEN
+            UPDATE tables
+            SET status = 'free', current_order_id = NULL
+            WHERE id = v_old_table AND current_order_id = p_order_id;
+        END IF;
+
+        IF p_table_id IS NOT NULL AND (v_old_table IS NULL OR v_old_table <> p_table_id) THEN
+            UPDATE tables
+            SET status = 'occupied', current_order_id = p_order_id
+            WHERE id = p_table_id;
+        END IF;
+    END IF;
+
+    SELECT v_affected AS affected;
 END$$
 
 DROP PROCEDURE IF EXISTS `sp_reset_failed_attempts`$$
@@ -697,10 +747,22 @@ END$$
 DROP PROCEDURE IF EXISTS `sp_void_order`$$
 CREATE PROCEDURE `sp_void_order`(IN p_order_id INT, IN p_user_id INT)
 BEGIN
+    DECLARE v_affected INT DEFAULT 0;
+
     UPDATE orders
     SET status = 'anulada', voided_at = CURRENT_TIMESTAMP, voided_by = p_user_id
     WHERE id = p_order_id AND status NOT IN ('pagada', 'anulada');
-    SELECT ROW_COUNT() AS affected;
+
+    SET v_affected = ROW_COUNT();
+
+    -- liberar la mesa que apuntaba a esta orden
+    IF v_affected > 0 THEN
+        UPDATE tables
+        SET status = 'free', current_order_id = NULL
+        WHERE current_order_id = p_order_id;
+    END IF;
+
+    SELECT v_affected AS affected;
 END$$
 
 DELIMITER ;

@@ -67,6 +67,13 @@ Fase 12 (Testing + Deploy) — requiere todas las fases
 > (Pagos) porque la deducción de inventario es **obligatoria y automática** al
 > cobrar, ejecutándose dentro de la transacción de pago.
 
+> **Nota (mesas):** la Fase 9 quedó en **dos estados** (`free`/`occupied`): al
+> cobrar o anular la orden la mesa vuelve a `free`, existe cambio manual desde
+> el selector de mesas del POS y desde Catálogos, y crear/mover una orden a una
+> mesa con otra orden activa devuelve **409**. Requiere la migración
+> [`020_mesa_libre_ocupada.sql`](../Deploy/Produccion/migrations/020_mesa_libre_ocupada.sql)
+> — ver [FASE_09](fases/FASE_09_mesas.md).
+
 > **Nota (plan de cocina y órdenes):** Fase 5 (KDS) y Fase 15 (Órdenes del
 > Administrador) están **en implementación por sub-fases**: A (datos), B (backend),
 > C (pantalla KDS), **D (POS: enviar a cocina)**, **H (agregar ítems a ordenes en

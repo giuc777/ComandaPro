@@ -47,6 +47,12 @@ export default function OrderEditModal({ order, onClose, onSave }) {
         return () => { alive = false; };
     }, [readOnly]);
 
+    function reloadTables() {
+        return api.getTables()
+            .then(data => setTables(Array.isArray(data) ? data : []))
+            .catch(() => setTables([]));
+    }
+
     useEffect(() => {
         function onKey(e) {
             if (e.key === 'Escape' && !saving) onClose();
@@ -163,6 +169,8 @@ export default function OrderEditModal({ order, onClose, onSave }) {
                                     tables={tables}
                                     selectedId={form.table_id}
                                     onSelect={table => setForm(prev => ({ ...prev, table_id: table.id }))}
+                                    onStatusChange={reloadTables}
+                                    onError={message => setError(message)}
                                 />
                             )}
                             {form.mode === 'mesa' && readOnly && (

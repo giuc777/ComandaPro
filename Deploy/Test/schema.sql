@@ -320,7 +320,7 @@ CREATE TABLE `tables` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(50) NOT NULL,
   `capacity` int(11) NOT NULL DEFAULT 4,
-  `status` enum('free','occupied','dirty') DEFAULT 'free',
+  `status` enum('free','occupied') DEFAULT 'free',
   `current_order_id` int(11) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)

@@ -129,8 +129,8 @@ BEGIN
         UPDATE orders SET status = 'pagada' WHERE id = p_order_id;
     END IF;
 
-    -- Liberar mesa (queda sucia para limpieza)
-    UPDATE tables SET status = 'dirty', current_order_id = NULL
+    -- Liberar mesa (dos estados: libre/ocupada -> vuelve a libre)
+    UPDATE tables SET status = 'free', current_order_id = NULL
     WHERE current_order_id = p_order_id;
 
     -- Ligar la venta al turno abierto (obligatorio)
@@ -286,11 +286,11 @@ test('flujo de cobro completo', async ({ page }) => {
 - [x] Selección de método de pago: **efectivo, tarjeta, qr**
 - [x] Cálculo de cambio solo para efectivo
 - [x] Tarjeta y QR solo **registran** el método (sin procesar pago)
-- [x] Solo se pueden cobrar órdenes en estado `pausada`
+- [x] Solo se pueden cobrar órdenes en estado `lista` o `completada` (regla FASE 05)
 - [x] **Se requiere un turno de caja abierto** para cobrar (FASE 10)
 - [x] Pago registra en tabla `payments` con `cashier_id`
 - [x] Orden cambia status a `pagada`
-- [x] Mesa se libera (status = dirty)
+- [x] Mesa se libera (`free`; dos estados: libre/ocupada)
 - [x] Recibo muestra detalles completos
 - [ ] Opcional: facturación SAT con número
 - [x] Resumen del día se actualiza por método
@@ -322,13 +322,16 @@ recibe como parametro (`p_apply_tax`). Si se omite, el default es `true`.
 4. Selecciona metodo de pago y (opcional) desmarca "Aplicar IVA 12%"
 5. Si efectivo: formulario con monto recibido + calculo de cambio + presets (Q25, Q50, Q100)
 6. Boton "Cobrar Q XX.00" llama `POST /api/payments`
-7. Backend: `sp_record_payment` valida status=pausada, valida turno abierto, aplica/omite IVA, calcula cambio, inserta pago, cambia orden a pagada, libera mesa, registra en shift_transactions
+7. Backend: `sp_record_payment` valida status=lista/completada, valida turno abierto, aplica/omite IVA, calcula cambio, inserta pago, cambia orden a pagada, libera mesa, registra en shift_transactions
 8. Frontend muestra modal de recibo y redirige a `/pos`
 
 ### Vinculacion mesa-orden
-`sp_create_parked_order` ahora vincula la mesa (`tables.status='occupied'`,
-`tables.current_order_id`) cuando se crea una orden con mesa. `sp_record_payment`
-la libera (`tables.status='dirty'`, `current_order_id=NULL`).
+`sp_create_parked_order` vincula la mesa (`tables.status='occupied'`,
+`tables.current_order_id`) cuando se crea una orden con mesa y rechaza con
+409 si la mesa ya tiene otra orden activa. `sp_record_payment` la libera
+(`tables.status='free'`, `current_order_id=NULL`); lo mismo hace
+`sp_void_order` al anular (dos estados: libre/ocupada, ver FASE 09 y
+migración `020_mesa_libre_ocupada.sql`).
 
 ### Archivos
 - `database/migrations/007_fase6_payments.sql`

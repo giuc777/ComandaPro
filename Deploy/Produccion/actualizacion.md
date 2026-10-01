@@ -16,14 +16,16 @@ Dashboard y cobro en Caja).
 
 | Version en produccion | Hasta `c7bc14b` (incluye la migracion 017 de menu) |
 |-----------------------|-----------------------------------------------------|
-| Se agrega             | FASE 05 (KDS cocina, D/H/F.3), FASE 15 (`/ordenes`), F.1/F.2 (Dashboard) |
-| Migracion nueva       | `migrations/018_kds_cocina.sql` |
+| Se agrega             | FASE 05 (KDS cocina, D/H/F.3), FASE 15 (`/ordenes`), F.1/F.2 (Dashboard), FASE 09 (mesas: dos estados + cambio manual) |
+| Migracion nueva       | `migrations/018_kds_cocina.sql`, `migrations/020_mesa_libre_ocupada.sql` |
 | Procedimientos        | `sp_simple.sql`, `sp_transaccionales.sql`, `sp_lectura.sql` |
 | Codigo                | backend (`pnpm install`) + frontend (`pnpm build`) |
 
 **Orden obligatorio: primero la base de datos, despues reiniciar el backend.**
 Si el backend nuevo arranca con la base vieja, el KDS y `/ordenes` fallan con
-`PROCEDURE sp_get_kds_orders does not exist` / `Unknown column 'o.sent_at'`.
+`PROCEDURE sp_get_kds_orders does not exist` / `Unknown column 'o.sent_at'` y
+el endpoint `PUT /api/tables/:id/status` falla con
+`PROCEDURE sp_update_table_status does not exist`.
 
 ---
 
@@ -35,14 +37,18 @@ mysql -u comandapro_user -p -e "
   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='orders'
     AND COLUMN_NAME IN ('sent_at','started_at','ready_at','completed_at','updated_by');
   SHOW PROCEDURE STATUS WHERE Db='DeerCoffeeDB' AND Name IN
-    ('sp_get_kds_orders','sp_get_orders_admin','sp_send_to_kitchen','sp_record_payment');
+    ('sp_get_kds_orders','sp_get_orders_admin','sp_send_to_kitchen','sp_record_payment','sp_update_table_status');
   SELECT COUNT(*) AS ordenes_activas FROM DeerCoffeeDB.orders
    WHERE status IN ('pausada','enviada','preparando','lista');
+  SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='tables' AND COLUMN_NAME='status';
 "
 ```
 
 - `cols_kds = 0` y solo `sp_send_to_kitchen` / `sp_record_payment` presentes
   => la migracion 018 y los SP nuevos **faltan** (situacion normal hasta `c7bc14b`).
+- `sp_update_table_status` ausente o `COLUMN_TYPE` con `'dirty'` => falta la
+  migracion 020 (situacion normal hasta `c7bc14b`).
 - `ordenes_activas > 0` => anotar el numero: se usa en el paso 5.
 
 ---
@@ -74,12 +80,13 @@ git pull
 
 ---
 
-## 4. Base de datos (4 archivos, en este orden)
+## 4. Base de datos (5 archivos, en este orden)
 
 ```bash
 cd ~/desarrollo/Deploy/Produccion
 
 mysql -u comandapro_user -p DeerCoffeeDB < migrations/018_kds_cocina.sql
+mysql -u comandapro_user -p DeerCoffeeDB < migrations/020_mesa_libre_ocupada.sql
 mysql -u comandapro_user -p DeerCoffeeDB < sp_simple.sql
 mysql -u comandapro_user -p DeerCoffeeDB < sp_transaccionales.sql
 mysql -u comandapro_user -p DeerCoffeeDB < sp_lectura.sql
@@ -88,14 +95,16 @@ mysql -u comandapro_user -p DeerCoffeeDB < sp_lectura.sql
 | # | Archivo | Aporta | Tipo |
 |---|---------|--------|------|
 | 1 | `migrations/018_kds_cocina.sql` | 8 columnas nuevas (`orders.sent_at/started_at/ready_at/completed_at/updated_by`, `order_items.sent/sent_at/prepared_at`) + indice `idx_orders_kds` + FK `fk_orders_updated_by` | Aditivo (`ADD COLUMN IF NOT EXISTS`), no toca filas existentes |
-| 2 | `sp_simple.sql` | Cabecera de la orden editable en cualquier estado no pagado (regla H) | Solo procedimientos |
-| 3 | `sp_transaccionales.sql` | `sp_send_to_kitchen` (marca `sent`, renueva `sent_at`), `sp_record_payment`, `sp_update_order_status`, `sp_add_order_item` | Solo procedimientos |
-| 4 | `sp_lectura.sql` | **Nuevos** `sp_get_kds_orders` y `sp_get_orders_admin` + dashboard con los 4 estados activos | Solo procedimientos |
+| 2 | `migrations/020_mesa_libre_ocupada.sql` | Mesa con **dos estados**: sanea `dirty -> free` y mesas `occupied` sin orden activa, y reduce el ENUM a `enum('free','occupied')` | Aditivo sobre `tables`, solo afecta filas de mesas |
+| 3 | `sp_simple.sql` | Cabecera editable en cualquier estado no pagado (regla H), `sp_void_order` **libera la mesa** y `sp_reopen_order` **sincroniza mesas** al cambiar `table_id` (409 si la destino esta ocupada) | Solo procedimientos |
+| 4 | `sp_transaccionales.sql` | `sp_create_parked_order` (409 si la mesa esta ocupada), `sp_record_payment` (libera la mesa en `free`), `sp_update_table_status` (cambio manual), `sp_send_to_kitchen`, `sp_update_order_status`, `sp_add_order_item` | Solo procedimientos |
+| 5 | `sp_lectura.sql` | **Nuevos** `sp_get_kds_orders` y `sp_get_orders_admin` + dashboard con los 4 estados activos | Solo procedimientos |
 
 Notas:
 
-- Los 4 archivos son **idempotentes**: se pueden re-ejecutar sin peligro
-  (`ADD COLUMN IF NOT EXISTS`, `DROP PROCEDURE IF EXISTS` + `CREATE`).
+- Los 5 archivos son **idempotentes**: se pueden re-ejecutar sin peligro
+  (`ADD COLUMN IF NOT EXISTS`, `DROP PROCEDURE IF EXISTS` + `CREATE`, y la 020
+  no vuelve a afectar filas si ya esta aplicada).
 - **La migracion 019 no se aplica aparte**: su contenido (el
   `sp_send_to_kitchen` final con validacion de items pendientes) ya viene en
   `sp_transaccionales.sql`.
@@ -139,13 +148,19 @@ curl -s http://localhost:3000/api/health
 # SP nuevos instalados
 mysql -u comandapro_user -p DeerCoffeeDB -e "
   SHOW PROCEDURE STATUS WHERE Db='DeerCoffeeDB' AND Name IN
-   ('sp_get_kds_orders','sp_get_orders_admin');"
+   ('sp_get_kds_orders','sp_get_orders_admin','sp_update_table_status');"
 
 # Columnas nuevas (debe dar 5)
 mysql -u comandapro_user -p -e "
   SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='orders'
     AND COLUMN_NAME IN ('sent_at','started_at','ready_at','completed_at','updated_by');"
+
+# Mesa: enum de dos estados y sin 'dirty' (la 020)
+mysql -u comandapro_user -p -e "
+  SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='tables' AND COLUMN_NAME='status';
+  SELECT status, COUNT(*) FROM DeerCoffeeDB.tables GROUP BY status;"
 
 # Los conteos del paso 2 deben ser IDENTICOS (productos/pagos/movimientos/ordenes/items)
 mysql -u comandapro_user -p DeerCoffeeDB -e "
@@ -160,6 +175,10 @@ Prueba manual en la app:
 2. `/kds` carga y refleja los estados (barista/cocina).
 3. `/ordenes` (solo Administrador) lista, filtra y edita una orden.
 4. En Caja, una orden `lista` se cobra; una orden `pausada` devuelve **409**.
+5. Mesas: en el selector del POS crear una orden deja la mesa **Ocupada**;
+   una segunda orden en esa mesa devuelve **409**; al cobrar o anular vuelve
+   a **Libre**; el candado cambia el estado a mano (y no deja liberar una
+   mesa con orden activa).
 
 ---
 
@@ -171,9 +190,13 @@ Prueba manual en la app:
 | Sin pantalla de cocina | `/kds` con los estados de la orden y refresco cada 15 s |
 | Ordenes no editables fuera de pausada | Cabecera editable por cualquier rol con modulo `pos` (regla H); reemplazar **items** solo Administrador o en `pausada` (409 en el resto) |
 | Items sin estado de envio | `order_items.sent` controla que la cocina vea solo lo enviado |
+| Mesa con 3 estados (`free`/`occupied`/`dirty`): al cobrar quedaba `dirty` para siempre | **Dos estados**: al cobrar o anular la mesa vuelve a `free`; cambio manual desde el selector de mesas y desde Catálogos (409 si hay orden activa) |
+| Mover una orden de mesa no sincronizaba los estados | `sp_reopen_order` libera la origen y ocupa la destino; crea/mover a una mesa con otra orden activa -> **409** |
 
 **No cambian:** productos, precios, inventario, proveedores, pagos, turnos,
-movimientos de caja ni ordenes ya registradas.
+movimientos de caja ni ordenes ya registradas. La unica data que toca la 020
+son las filas de `tables` en `dirty` o `occupied` sin orden activa (pasa a
+`free`).
 
 ---
 
@@ -200,6 +223,13 @@ cd back-end && pnpm install && sudo systemctl start comandapro-backend
 > `git checkout c7bc14b` y reiniciar el backend (la base puede quedarse como
 > esta: los SP y columnas extra no rompen la version vieja).
 
+> **Atencion con la migracion 020:** el ENUM de `tables` dejo de aceptar
+> `'dirty'`. Si se vuelve al codigo anterior **sin** restaurar la base, el
+> `sp_record_payment` viejo falla al intentar marcar la mesa como `dirty`
+> (ERROR 1265). En el rollback hay que restaurar el respaldo (que trae el
+> ENUM de 3 estados) junto con el codigo, o re-anchar el ENUM con
+> `ALTER TABLE tables MODIFY status ENUM('free','occupied','dirty') DEFAULT 'free';`.
+
 ---
 
 ## 10. Resumen en 6 lineas
@@ -207,8 +237,8 @@ cd back-end && pnpm install && sudo systemctl start comandapro-backend
 ```
 1. mysqldump + conteos            (respaldo y referencia)
 2. git pull                       (codigo y archivos .sql)
-3. 018 + sp_simple + sp_transaccionales + sp_lectura   (base, antes de reiniciar)
+3. 018 + 020 + sp_simple + sp_transaccionales + sp_lectura   (base, antes de reiniciar)
 4. backfill de sent SOLO si hay ordenes activas
 5. pnpm build + restart backend
-6. health + conteos identicos + prueba de kds/ordenes/cobro
+6. health + conteos identicos + prueba de kds/ordenes/cobro/mesas
 ```

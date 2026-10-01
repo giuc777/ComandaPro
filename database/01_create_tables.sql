@@ -97,7 +97,7 @@ CREATE TABLE tables (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
     capacity INT NOT NULL DEFAULT 4,
-    status ENUM('free', 'occupied', 'dirty') DEFAULT 'free',
+    status ENUM('free', 'occupied') DEFAULT 'free',
     current_order_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -272,7 +272,7 @@ const options = {
                         id: { type: 'integer', example: 1 },
                         name: { type: 'string', example: 'Mesa 1' },
                         capacity: { type: 'integer', example: 4 },
-                        status: { type: 'string', enum: ['free','occupied','dirty'], example: 'free' },
+                        status: { type: 'string', enum: ['free','occupied'], example: 'free' },
                         current_order_id: { type: 'integer', nullable: true }
                     }
                 },

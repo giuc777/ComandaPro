@@ -9,6 +9,16 @@ async function getOrderStatus(pool, id) {
     return rows?.[0]?.status || null;
 }
 
+// Convierte una senyal SQLSTATE 45000 de los procedimientos en respuesta HTTP.
+// Devuelve true si ya respondio (404 si el registro no existe, 409 en el resto).
+function sendSignal(res, error) {
+    if (error?.sqlState !== '45000') return false;
+    const message = error.sqlMessage || error.message || 'Operacion no permitida';
+    const notFound = message === 'Mesa no encontrada' || message === 'Orden no encontrada';
+    res.status(notFound ? 404 : 409).json({ error: message });
+    return true;
+}
+
 const ORDER_STATUSES = ['pausada', 'pagada', 'anulada', 'enviada', 'preparando', 'lista', 'completada'];
 
 function toDbModifiers(value) {
@@ -114,6 +124,7 @@ export function createOrderController(pool) {
             } catch (error) {
                 console.error('Error in createOrder:', error.message);
                 if (conn) await conn.rollback();
+                if (sendSignal(res, error)) return;
                 res.status(500).json({ error: 'Error del servidor' });
             } finally {
                 if (conn) conn.release();
@@ -317,9 +328,7 @@ export function createOrderController(pool) {
             } catch (error) {
                 console.error('Error in updateOrder:', error.message);
                 if (conn) await conn.rollback();
-                if (error.sqlState === '45000') {
-                    return res.status(409).json({ error: error.sqlMessage || error.message });
-                }
+                if (sendSignal(res, error)) return;
                 res.status(500).json({ error: 'Error del servidor' });
             } finally {
                 if (conn) conn.release();
@@ -367,6 +376,27 @@ export function createOrderController(pool) {
                 res.json(toJSON(rows));
             } catch (error) {
                 console.error('Error in listTables:', error.message);
+                res.status(500).json({ error: 'Error del servidor' });
+            }
+        },
+
+        async updateTableStatus(req, res) {
+            try {
+                const id = Number(req.params.id);
+                const status = req.body?.status;
+
+                if (!Number.isInteger(id) || id <= 0) {
+                    return res.status(400).json({ error: 'Id de mesa invalido' });
+                }
+                if (status !== 'free' && status !== 'occupied') {
+                    return res.status(400).json({ error: 'Estado invalido: use free u occupied' });
+                }
+
+                const [rows] = await pool.query('CALL sp_update_table_status(?, ?)', [id, status]);
+                res.json(toJSON(rows[0]));
+            } catch (error) {
+                console.error('Error in updateTableStatus:', error.message);
+                if (sendSignal(res, error)) return;
                 res.status(500).json({ error: 'Error del servidor' });
             }
         }
