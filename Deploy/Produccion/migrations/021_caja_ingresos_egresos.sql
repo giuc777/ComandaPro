@@ -1,5 +1,5 @@
 -- ============================================
--- DeerCoffee / ComandaPro - migracion 021
+-- DeerCoffee / ComandaPro - migracion 021 (PRODUCCION)
 -- Caja: ingresos y egresos manuales
 --
 --   shift_transactions.type    : enum('sale','refund','void')
@@ -14,21 +14,24 @@
 -- El arqueo (efectivo esperado) suma los ingresos en efectivo y resta
 -- los egresos en efectivo.
 --
--- Nota: 'ADD COLUMN' no es idempotente; re-ejecutar da ERROR 1060
--- (Duplicate column name) sin efectos secundarios. El MODIFY del ENUM si
--- es idempotente.
+-- SIN ESTA MIGRACION los SP nuevos fallan: sp_get_shift_transactions
+-- selecciona st.concept (ERROR 1054 -> lista de movimientos vacia) y
+-- sp_record_shift_transaction inserta concept (ERROR 1054 -> 500 en
+-- Ingresar/Retirar).
+--
+-- Idempotente: ADD COLUMN IF NOT EXISTS + MODIFY de ENUM re-ejecutables.
 --
 -- Verificacion post-aplicacion:
 --   SHOW CREATE TABLE shift_transactions;   -- type con income/expense + concept
 --
 -- Aplicar:
---   mysql comandapro < database/migrations/021_caja_ingresos_egresos.sql
+--   mysql -u comandapro_user -p DeerCoffeeDB < Deploy/Produccion/migrations/021_caja_ingresos_egresos.sql
 -- ============================================
-USE comandapro;
+USE `DeerCoffeeDB`;
 
 -- 1) motivo del movimiento
 ALTER TABLE shift_transactions
-    ADD COLUMN concept VARCHAR(120) NULL AFTER type;
+    ADD COLUMN IF NOT EXISTS concept VARCHAR(120) NULL AFTER type;
 
 -- 2) el ENUM admite movimientos manuales
 ALTER TABLE shift_transactions

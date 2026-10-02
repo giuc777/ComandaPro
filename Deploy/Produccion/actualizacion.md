@@ -114,7 +114,7 @@ mysql -u comandapro_user -p DeerCoffeeDB < sp_lectura.sql
 |---|---------|--------|------|
 | 1 | `migrations/018_kds_cocina.sql` | 8 columnas nuevas (`orders.sent_at/started_at/ready_at/completed_at/updated_by`, `order_items.sent/sent_at/prepared_at`) + indice `idx_orders_kds` + FK `fk_orders_updated_by` | Aditivo (`ADD COLUMN IF NOT EXISTS`), no toca filas existentes |
 | 2 | `migrations/020_mesa_libre_ocupada.sql` | Mesa con **dos estados**: sanea `dirty -> free` y mesas `occupied` sin orden activa, y reduce el ENUM a `enum('free','occupied')` | Aditivo sobre `tables`, solo afecta filas de mesas |
-| 3 | `migrations/021_caja_ingresos_egresos.sql` | Caja: columna `shift_transactions.concept` (VARCHAR 120) y ENUM ampliado a `('sale','refund','void','income','expense')` | Aditivo; no cambia filas existentes |
+| 3 | `migrations/021_caja_ingresos_egresos.sql` | Caja: columna `shift_transactions.concept` (VARCHAR 120) y ENUM ampliado a `('sale','refund','void','income','expense')` | Aditivo (`ADD COLUMN IF NOT EXISTS`), no cambia filas existentes |
 | 4 | `sp_simple.sql` | Cabecera editable en cualquier estado no pagado (regla H), `sp_void_order` **libera la mesa** y `sp_reopen_order` **sincroniza mesas** al cambiar `table_id` (409 si la destino esta ocupada); `sp_close_shift` descuenta egresos en el efectivo esperado y `sp_record_shift_transaction` valida ingresos/egresos manuales; `sp_update_user` renombra el username (`p_username`) | Solo procedimientos |
 | 5 | `sp_transaccionales.sql` | `sp_create_parked_order` (409 si la mesa esta ocupada), `sp_record_payment` (libera la mesa en `free`), `sp_update_table_status` (cambio manual), `sp_send_to_kitchen`, `sp_update_order_status`, `sp_add_order_item` | Solo procedimientos |
 | 6 | `sp_lectura.sql` | **Nuevos** `sp_get_kds_orders` y `sp_get_orders_admin` + dashboard con los 4 estados activos + `concept`/ingresos/egresos en las lecturas de caja | Solo procedimientos |
@@ -123,10 +123,11 @@ Notas:
 
 - Los 6 archivos son **idempotentes**: se pueden re-ejecutar sin peligro
   (`ADD COLUMN IF NOT EXISTS`, `DROP PROCEDURE IF EXISTS` + `CREATE`, y la 020
-  no vuelve a afectar filas si ya esta aplicada). Excepcion menor: el
-  `ADD COLUMN concept` de la 021 no es idempotente y re-ejecutarlo da
-  `ERROR 1060 (Duplicate column name)` sin efectos secundarios; se puede pasar
-  por alto.
+  no vuelve a afectar filas si ya esta aplicada).
+- **Usa siempre `Deploy/Produccion/migrations/`**: cada fichero de ahi arranca
+  con ``USE `DeerCoffeeDB`;``. Los de `database/migrations/` son de desarrollo
+  y arrancan con `USE comandapro;` (si te sale
+  `ERROR 1049 Unknown database 'comandapro'` estas usando los de desarrollo).
 - **La migracion 019 no se aplica aparte**: su contenido (el
   `sp_send_to_kitchen` final con validacion de items pendientes) ya viene en
   `sp_transaccionales.sql`.
@@ -170,7 +171,15 @@ curl -s http://localhost:3000/api/health
 # SP nuevos instalados
 mysql -u comandapro_user -p DeerCoffeeDB -e "
   SHOW PROCEDURE STATUS WHERE Db='DeerCoffeeDB' AND Name IN
-   ('sp_get_kds_orders','sp_get_orders_admin','sp_update_table_status');"
+   ('sp_get_kds_orders','sp_get_orders_admin','sp_update_table_status',
+    'sp_record_shift_transaction','sp_close_shift','sp_get_current_shift',
+    'sp_get_arqueo_breakdown','sp_get_shift_transactions','sp_get_cash_closing');"
+
+# Cuerpo de los SP tocados: cada grep debe dar >= 1 (0 => el SP quedo viejo)
+mysql -u comandapro_user -p -e 'SHOW CREATE PROCEDURE sp_get_shift_transactions\G' | grep -c 'st.concept'
+mysql -u comandapro_user -p -e 'SHOW CREATE PROCEDURE sp_record_shift_transaction\G' | grep -c 'p_concept'
+mysql -u comandapro_user -p -e 'SHOW CREATE PROCEDURE sp_get_current_shift\G'    | grep -c 'income_total'
+mysql -u comandapro_user -p -e 'SHOW CREATE PROCEDURE sp_update_user\G'          | grep -c 'p_username'
 
 # Columnas nuevas (debe dar 5)
 mysql -u comandapro_user -p -e "
@@ -184,11 +193,11 @@ mysql -u comandapro_user -p -e "
   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='tables' AND COLUMN_NAME='status';
   SELECT status, COUNT(*) FROM DeerCoffeeDB.tables GROUP BY status;"
 
-# Caja: enum con income/expense + columna concept (la 021)
+# Caja: enum con income/expense + columna concept (la 021) -> concept_caja = 1
 mysql -u comandapro_user -p -e "
   SELECT COLUMN_TYPE FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='shift_transactions' AND COLUMN_NAME='type';
-  SELECT COLUMN_NAME FROM information_schema.COLUMNS
+  SELECT COUNT(*) AS concept_caja FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='DeerCoffeeDB' AND TABLE_NAME='shift_transactions' AND COLUMN_NAME='concept';"
 
 # sp_update_user acepta el nuevo p_username (debe listar 6 parametros)
